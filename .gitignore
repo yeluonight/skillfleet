@@ -1,0 +1,64 @@
+# Build artifacts
+/skillfleet-server
+/skillfleet-agent
+/server                          # produced by `go build ./apps/server/...` without -o
+/agent                           # ditto for ./apps/agent
+/bin/
+/dist/
+/build/
+*.exe
+
+# Go
+*.test
+*.out
+/coverage.out
+/coverage.html
+vendor/
+
+# Node / Vite / pnpm
+node_modules/
+.pnpm-store/
+.pnp.*
+apps/web/dist/
+apps/web/.vite/
+apps/web/coverage/
+
+# SQLite databases (runtime data)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Local runtime data dirs
+.skillfleet/
+/data/
+/store/
+/logs/
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDE / editor
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# OS
+.AppleDouble
+.LSOverride
+
+# Logs
+*.log
+
+# Claude / agent scratch
+.claude/scratch/
+.ace-tool/

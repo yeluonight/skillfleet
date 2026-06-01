@@ -1,0 +1,61 @@
+# CI: lint + test on every push to main and every PR. Keeps main
+# buildable (the §1.1 hard rule) and catches regressions before a
+# release tag is cut.
+#
+# Two jobs run in parallel: Go (vet + test + golangci-lint) and web
+# (tsc + eslint + build). The committed internal/webui/embed/dist stub
+# lets the Go build/test succeed without first building the WebUI, so the
+# Go job needs no Node.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: go vet
+        run: go vet ./apps/... ./internal/... ./migrations/...
+      - name: go test
+        run: go test ./apps/... ./internal/... ./migrations/...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          # v2.x lint is built with go1.26 and can lint this go1.25 module;
+          # the action's older default (v1.64.x / go1.24) refuses to. Note
+          # golangci-lint v2 requires golangci-lint-action v7. Lint config
+          # lives in .golangci.yml.
+          version: v2.12.2
+          args: ./apps/... ./internal/... ./migrations/...
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # node 24 / npm 11 to match the lockfile: npm 10 mis-reports the
+          # nested optional @emnapi/* native deps as missing from the lock.
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - name: tsc
+        run: npx tsc -b
+      - name: eslint
+        run: npx eslint src
+      - name: build
+        run: npm run build

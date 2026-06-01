@@ -1,0 +1,292 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/yeluonight/skillfleet/internal/agentapi"
+	"github.com/yeluonight/skillfleet/internal/agentcfg"
+	"github.com/yeluonight/skillfleet/internal/agentclient"
+	"github.com/yeluonight/skillfleet/internal/agentinstall"
+	"github.com/yeluonight/skillfleet/internal/agentstate"
+	"github.com/yeluonight/skillfleet/internal/audit"
+	"github.com/yeluonight/skillfleet/internal/db"
+	"github.com/yeluonight/skillfleet/internal/deploy"
+	"github.com/yeluonight/skillfleet/internal/devices"
+	"github.com/yeluonight/skillfleet/internal/enrollment"
+	"github.com/yeluonight/skillfleet/internal/fingerprint"
+	"github.com/yeluonight/skillfleet/internal/skill"
+	"github.com/yeluonight/skillfleet/migrations"
+
+	"net/http/httptest"
+)
+
+// archivePackages serves a single in-memory archive for any version id,
+// implementing agentapi.PackageSource by writing the bytes to a temp
+// file (ServeContent needs an *os.File).
+type archivePackages struct{ path string }
+
+func (a archivePackages) ArchiveForVersion(string) (*os.File, int64, error) {
+	f, err := os.Open(a.path)
+	if err != nil {
+		return nil, 0, agentapi.ErrPackageNotFound
+	}
+	info, _ := f.Stat()
+	return f, info.Size(), nil
+}
+
+// TestRunOneJob_EndToEndInstall is the §17 acceptance #1 end-to-end
+// proof: a real downlink server hands the agent an install job, the
+// agent downloads the real package, installs it into its allowed root,
+// and the skill lands on disk with a marker — exercised through the
+// actual agentclient + agentinstall, not mocks.
+func TestRunOneJob_EndToEndInstall(t *testing.T) {
+	ctx := context.Background()
+
+	// --- build a real package + its plan ---
+	src := t.TempDir()
+	skillMD := "---\nname: deploy-helper\ndescription: x\n---\n\n# deploy-helper\n"
+	if err := os.WriteFile(filepath.Join(src, "SKILL.md"), []byte(skillMD), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fp, err := fingerprint.Compute(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	info, err := skill.Pack(src, &buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archivePath := filepath.Join(t.TempDir(), "pkg.tgz")
+	if err := os.WriteFile(archivePath, buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	specs := make([]deploy.FileSpec, 0, len(fp.Files))
+	for _, fe := range fp.Files {
+		specs = append(specs, deploy.FileSpec{Path: fe.Path, SHA256: fe.Hash, Size: fe.Size, Exec: fe.Exec})
+	}
+	plan := deploy.Plan{
+		VersionID: "sv_1", SkillName: "deploy-helper",
+		ContentSHA256: fp.Hash, ArchiveSHA256: info.SHA256, ArchiveBytes: info.Bytes,
+		DownloadPath: "/agent/packages/sv_1",
+		Marker:       deploy.InstallMarker{ManagedBy: "skillfleet", SkillName: "deploy-helper", InstalledVersionID: "sv_1", ContentSHA256: fp.Hash},
+		Files:        specs,
+	}
+	planJSON, _ := json.Marshal(plan)
+
+	// --- real downlink server + enrolled device ---
+	d, err := db.Open(ctx, filepath.Join(t.TempDir(), "e2e.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	if _, err := migrations.Apply(ctx, d, migrations.Embedded()); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1_700_000_000, 0)
+	tx, _ := d.BeginTx(ctx, nil)
+	tok, _ := enrollment.Create(ctx, d, time.Hour, now)
+	enrollment.Consume(ctx, tx, tok.Plaintext, now)
+	res, err := devices.Enroll(ctx, tx, devices.EnrollInput{Name: "n", OS: "linux", Arch: "amd64"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx.Commit()
+	if err := devices.SetStatus(ctx, d, res.Device.ID, devices.StatusApproved); err != nil {
+		t.Fatal(err)
+	}
+
+	store := deploy.New(d)
+	job, err := store.Create(ctx, deploy.CreateParams{
+		DeviceID:    res.Device.ID,
+		Operation:   deploy.OpInstall,
+		RequestJSON: `{"operation":"install","skill_name":"deploy-helper","version_id":"sv_1","target":{"tool_key":"claude-code","scope":"user","root_id":"r1"}}`,
+		PlanJSON:    string(planJSON),
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(agentapi.NewRouter(agentapi.Deps{
+		DB:       d,
+		Now:      func() time.Time { return now },
+		Audit:    audit.New(d, nil, func() time.Time { return now }),
+		Packages: archivePackages{path: archivePath},
+	}))
+	t.Cleanup(srv.Close)
+
+	// --- real client + executor pointed at an allowed root ---
+	client, err := agentclient.New(agentclient.Config{
+		ServerURL: srv.URL, DeviceID: res.Device.ID, DeviceSecret: res.Secret,
+		Now: func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowedRoot := t.TempDir()
+	cfg := agentcfg.Config{
+		AllowedRoots: []agentcfg.AllowedRoot{{ID: "r1", Tool: "claude-code", Scope: "user", Path: allowedRoot}},
+	}
+	exec := agentinstall.NewExecutor(agentinstall.Config{
+		BackupsDir:   filepath.Join(t.TempDir(), "backups"),
+		AllowedRoots: agentRoots(cfg),
+	}, fetcherAdapter{client}, func() time.Time { return now })
+
+	// --- claim the job (as the loop would) and run it ---
+	claimed, ok, err := client.Jobs(ctx)
+	if err != nil || !ok {
+		t.Fatalf("claim: ok=%v err=%v", ok, err)
+	}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	stateWriter := agentstate.NewWriter(agentRoots(cfg), t.TempDir())
+	runOneJob(ctx, log, client, exec, stateWriter, claimed)
+
+	// --- the skill must be installed on disk ---
+	installed := filepath.Join(allowedRoot, "deploy-helper", "SKILL.md")
+	got, rerr := os.ReadFile(installed)
+	if rerr != nil {
+		t.Fatalf("skill not installed: %v", rerr)
+	}
+	if string(got) != skillMD {
+		t.Errorf("installed content = %q", string(got))
+	}
+	if _, err := os.Stat(filepath.Join(allowedRoot, "deploy-helper", ".skillfleet-install.json")); err != nil {
+		t.Errorf("marker missing: %v", err)
+	}
+
+	// --- the job must be recorded succeeded on the server ---
+	final, _ := store.Get(ctx, job.ID)
+	if final.Status != deploy.StatusSucceeded {
+		t.Errorf("job status = %q, want succeeded; result=%s", final.Status, final.ResultJSON)
+	}
+}
+
+// TestRunOneJob_EndToEndStateChange is the Phase 9 end-to-end proof: a
+// real downlink server hands the agent a state_change job, and the agent
+// flips the skill's claude-code state by writing skillOverrides in the
+// root's settings.json — through the actual agentclient + agentstate, not
+// mocks. The skill files are NOT touched (state lives out of band).
+func TestRunOneJob_EndToEndStateChange(t *testing.T) {
+	ctx := context.Background()
+
+	// --- an allowed claude-code root with a skill already on disk ---
+	allowedRoot := t.TempDir() // stands in for ~/.claude/skills
+	skillDir := filepath.Join(allowedRoot, "deploy-helper")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skillMD := "---\nname: deploy-helper\ndescription: x\n---\n"
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillMD), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// --- real downlink server + enrolled, approved device ---
+	d, err := db.Open(ctx, filepath.Join(t.TempDir(), "e2e_sc.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+	if _, err := migrations.Apply(ctx, d, migrations.Embedded()); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1_700_000_000, 0)
+	tx, _ := d.BeginTx(ctx, nil)
+	tok, _ := enrollment.Create(ctx, d, time.Hour, now)
+	enrollment.Consume(ctx, tx, tok.Plaintext, now)
+	res, err := devices.Enroll(ctx, tx, devices.EnrollInput{Name: "n", OS: "linux", Arch: "amd64"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx.Commit()
+	if err := devices.SetStatus(ctx, d, res.Device.ID, devices.StatusApproved); err != nil {
+		t.Fatal(err)
+	}
+
+	// The state-change plan + request the server would have stored.
+	scPlan := deploy.StateChangePlan{
+		Target:       deploy.Target{ToolKey: "claude-code", Scope: "user", RootID: "r1"},
+		SkillName:    "deploy-helper",
+		DesiredState: "off",
+	}
+	planJSON, _ := json.Marshal(scPlan)
+	store := deploy.New(d)
+	job, err := store.Create(ctx, deploy.CreateParams{
+		DeviceID:    res.Device.ID,
+		Operation:   deploy.OpStateChange,
+		RequestJSON: `{"operation":"state_change","skill_name":"deploy-helper","desired_state":"off","target":{"tool_key":"claude-code","scope":"user","root_id":"r1"}}`,
+		PlanJSON:    string(planJSON),
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := httptest.NewServer(agentapi.NewRouter(agentapi.Deps{
+		DB:    d,
+		Now:   func() time.Time { return now },
+		Audit: audit.New(d, nil, func() time.Time { return now }),
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := agentclient.New(agentclient.Config{
+		ServerURL: srv.URL, DeviceID: res.Device.ID, DeviceSecret: res.Secret,
+		Now: func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The writer's home dir is irrelevant for claude-code (its config path
+	// derives from the resolved root's parent); set it to a temp dir.
+	cfg := agentcfg.Config{
+		AllowedRoots: []agentcfg.AllowedRoot{{ID: "r1", Tool: "claude-code", Scope: "user", Path: allowedRoot}},
+	}
+	exec := agentinstall.NewExecutor(agentinstall.Config{
+		BackupsDir:   filepath.Join(t.TempDir(), "backups"),
+		AllowedRoots: agentRoots(cfg),
+	}, fetcherAdapter{client}, func() time.Time { return now })
+	stateWriter := agentstate.NewWriter(agentRoots(cfg), t.TempDir())
+
+	// --- claim + run the job ---
+	claimed, ok, err := client.Jobs(ctx)
+	if err != nil || !ok {
+		t.Fatalf("claim: ok=%v err=%v", ok, err)
+	}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	runOneJob(ctx, log, client, exec, stateWriter, claimed)
+
+	// --- settings.json (sibling of the skills root) carries the override ---
+	settingsPath := filepath.Join(filepath.Dir(allowedRoot), "settings.json")
+	raw, rerr := os.ReadFile(settingsPath)
+	if rerr != nil {
+		t.Fatalf("settings.json not written: %v", rerr)
+	}
+	var settings struct {
+		SkillOverrides map[string]string `json:"skillOverrides"`
+	}
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		t.Fatalf("settings.json invalid: %v", err)
+	}
+	if settings.SkillOverrides["deploy-helper"] != "off" {
+		t.Errorf("override = %q, want off; settings=%s", settings.SkillOverrides["deploy-helper"], raw)
+	}
+
+	// --- the skill's own files are untouched (state is out of band) ---
+	got, _ := os.ReadFile(filepath.Join(skillDir, "SKILL.md"))
+	if string(got) != skillMD {
+		t.Errorf("SKILL.md was modified by a state change: %q", got)
+	}
+
+	// --- the job is recorded succeeded ---
+	final, _ := store.Get(ctx, job.ID)
+	if final.Status != deploy.StatusSucceeded {
+		t.Errorf("job status = %q, want succeeded; result=%s", final.Status, final.ResultJSON)
+	}
+}
