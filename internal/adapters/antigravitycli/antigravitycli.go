@@ -3,18 +3,16 @@
 //
 // Roots scanned:
 //
-//	<workspace-root>/.agents/skills    (project scope)
 //	~/.gemini/antigravity-cli/skills   (user scope)
 //	~/.gemini/skills                   (user scope)
 //
 // Like the Antigravity GUI adapter, the CLI exposes no file-readable
 // per-skill enable config, so every discovered directory is reported
-// available/on.
+// available/on. Shared .agents/skills content is represented by the
+// dedicated agents adapter, not duplicated here.
 package antigravitycli
 
 import (
-	"path/filepath"
-
 	"github.com/yeluonight/skillfleet/internal/adapters"
 	"github.com/yeluonight/skillfleet/internal/skillmd"
 )
@@ -25,6 +23,12 @@ const (
 
 	nativeAvailable = "available"
 )
+
+// rootSpecs enumerates Antigravity CLI's scan locations in deterministic order.
+var rootSpecs = []adapters.RootSpec{
+	{IDBase: "antigravitycli_user_cli", Scope: adapters.ScopeUser, Tmpl: "~/.gemini/antigravity-cli/skills"},
+	{IDBase: "antigravitycli_user_gemini", Scope: adapters.ScopeUser, Tmpl: "~/.gemini/skills"},
+}
 
 // Adapter is the read-only Antigravity CLI adapter.
 type Adapter struct{}
@@ -37,39 +41,14 @@ func (a *Adapter) Key() string         { return toolKey }
 func (a *Adapter) DisplayName() string { return displayName }
 
 func (a *Adapter) SkillRoots(sc adapters.ScanContext) ([]adapters.SkillRoot, error) {
-	var roots []adapters.SkillRoot
+	return adapters.SkillRootsFromSpecs(sc, toolKey, rootSpecs)
+}
 
-	userSpecs := []struct {
-		id  string
-		rel string
-	}{
-		{"antigravitycli_user_cli", "~/.gemini/antigravity-cli/skills"},
-		{"antigravitycli_user_gemini", "~/.gemini/skills"},
-	}
-	for _, spec := range userSpecs {
-		p, err := adapters.ExpandHome(spec.rel, sc.HomeDir)
-		if err != nil {
-			return nil, err
-		}
-		if adapters.DirExists(p) {
-			roots = append(roots, adapters.SkillRoot{
-				ID: spec.id, Tool: toolKey, Scope: adapters.ScopeUser, Path: p,
-			})
-		}
-	}
-
-	for i, proj := range sc.ProjectRoots {
-		p := filepath.Join(proj, ".agents", "skills")
-		if adapters.DirExists(p) {
-			roots = append(roots, adapters.SkillRoot{
-				ID:    adapters.ProjectRootID("antigravitycli_project", i),
-				Tool:  toolKey,
-				Scope: adapters.ScopeProject,
-				Path:  p,
-			})
-		}
-	}
-	return roots, nil
+// CandidateRoots suggests Antigravity CLI's user skill roots for
+// registration. Detected when ~/.gemini exists.
+func (a *Adapter) CandidateRoots(sc adapters.ScanContext) []adapters.CandidateRoot {
+	detected := adapters.ConfigDirExists(sc.HomeDir, "~/.gemini")
+	return adapters.BuildCandidateRootsFromRootSpecs(sc, toolKey, detected, rootSpecs)
 }
 
 func (a *Adapter) ScanSkills(sc adapters.ScanContext, root adapters.SkillRoot) ([]adapters.DiscoveredSkill, error) {

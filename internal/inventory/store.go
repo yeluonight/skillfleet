@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/yeluonight/skillfleet/internal/idgen"
@@ -24,8 +25,9 @@ var ErrInvalidReport = errors.New("inventory: invalid report")
 // constraints so a malformed report is rejected with a clear error
 // before it reaches SQLite (whose CHECK message is less actionable).
 var (
-	validScopes = map[string]bool{"user": true, "project": true, "system": true}
-	validStates = map[string]bool{
+	validScopes     = map[string]bool{"user": true, "project": true, "system": true}
+	validRootScopes = map[string]bool{"user": true, "system": true}
+	validStates     = map[string]bool{
 		"on": true, "off": true, "name-only": true,
 		"user-invocable-only": true, "ask": true, "unknown": true,
 	}
@@ -62,7 +64,38 @@ func (r Report) Validate() error {
 			}
 		}
 	}
+	for i, rc := range r.Roots {
+		if rc.ToolKey == "" {
+			return fmt.Errorf("%w: roots[%d].tool_key empty", ErrInvalidReport, i)
+		}
+		if !validRootScopes[rc.Scope] {
+			return fmt.Errorf("%w: roots[%d].scope %q invalid", ErrInvalidReport, i, rc.Scope)
+		}
+		if rc.Path == "" {
+			return fmt.Errorf("%w: roots[%d].path empty", ErrInvalidReport, i)
+		}
+		if !isReportedRootPathAbs(rc.Path) {
+			return fmt.Errorf("%w: roots[%d].path %q not absolute", ErrInvalidReport, i, rc.Path)
+		}
+		if rc.Registered && rc.RootID == "" {
+			return fmt.Errorf("%w: roots[%d].root_id empty for registered root", ErrInvalidReport, i)
+		}
+	}
 	return nil
+}
+
+func isReportedRootPathAbs(path string) bool {
+	if strings.HasPrefix(path, "/") {
+		return true
+	}
+	if strings.HasPrefix(path, `\\`) || strings.HasPrefix(path, `//`) {
+		return true
+	}
+	return len(path) >= 3 && isASCIIAlpha(path[0]) && path[1] == ':' && (path[2] == '\\' || path[2] == '/')
+}
+
+func isASCIIAlpha(b byte) bool {
+	return ('a' <= b && b <= 'z') || ('A' <= b && b <= 'Z')
 }
 
 // Store persists a report for deviceID, replacing the device's prior
@@ -105,10 +138,18 @@ func Store(ctx context.Context, db *sql.DB, deviceID string, r Report, now time.
 	ms := now.UnixMilli()
 	skillCount := r.SkillCount()
 	rootCount := r.RootCount()
+	var rootsJSON any
+	if len(r.Roots) > 0 {
+		raw, err := json.Marshal(r.Roots)
+		if err != nil {
+			return StoreResult{}, fmt.Errorf("inventory: marshal roots: %w", err)
+		}
+		rootsJSON = string(raw)
+	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO inventory_runs(id, device_id, started_at, skill_count, root_count, agent_version, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, runID, deviceID, ms, skillCount, rootCount, nullable(r.AgentVersion), ms); err != nil {
+		INSERT INTO inventory_runs(id, device_id, started_at, skill_count, root_count, agent_version, roots_json, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, runID, deviceID, ms, skillCount, rootCount, nullable(r.AgentVersion), rootsJSON, ms); err != nil {
 		return StoreResult{}, fmt.Errorf("inventory: insert run: %w", err)
 	}
 

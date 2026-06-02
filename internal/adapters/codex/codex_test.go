@@ -206,3 +206,31 @@ func TestSkillRoots_ProjectScope(t *testing.T) {
 		t.Errorf("project root missing: %+v", roots)
 	}
 }
+
+func TestCandidateRoots(t *testing.T) {
+	home := t.TempDir()
+	cands := New().CandidateRoots(adapters.ScanContext{HomeDir: home})
+	// Two specs: shared ~/.agents/skills (user) + /etc/codex/skills (system).
+	if len(cands) != 2 {
+		t.Fatalf("got %d candidates, want 2", len(cands))
+	}
+
+	var shared, system *adapters.CandidateRoot
+	for i := range cands {
+		switch cands[i].Scope {
+		case adapters.ScopeUser:
+			shared = &cands[i]
+		case adapters.ScopeSystem:
+			system = &cands[i]
+		}
+	}
+	if shared == nil || system == nil {
+		t.Fatalf("expected one user + one system candidate, got %+v", cands)
+	}
+	if shared.DisplayTmpl != "~/.agents/skills" || !shared.Shared {
+		t.Errorf("user candidate should be the shared ~/.agents/skills, got %q shared=%v", shared.DisplayTmpl, shared.Shared)
+	}
+	if system.Path != "/etc/codex/skills" || system.Shared {
+		t.Errorf("system candidate = %q shared=%v", system.Path, system.Shared)
+	}
+}

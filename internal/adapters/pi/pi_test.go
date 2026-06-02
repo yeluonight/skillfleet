@@ -94,15 +94,16 @@ func TestSkillRoots_UserScopes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(roots) != 2 {
-		t.Fatalf("got %d user roots, want 2: %+v", len(roots), roots)
+	if len(roots) != 1 || roots[0].ID != "pi_user_agent" {
+		t.Fatalf("got roots %+v, want only pi_user_agent", roots)
 	}
 }
 
 func TestSkillRoots_ProjectScopes(t *testing.T) {
 	home := t.TempDir()
 	proj := t.TempDir()
-	// Create all three project conventions.
+	// Create Pi's two project conventions plus .agents/skills, which is owned
+	// by the dedicated agents adapter and intentionally ignored here.
 	for _, rel := range []string{".pi/skills", ".agents/skills", "skills"} {
 		if err := os.MkdirAll(filepath.Join(proj, rel), 0o755); err != nil {
 			t.Fatal(err)
@@ -115,8 +116,8 @@ func TestSkillRoots_ProjectScopes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(roots) != 3 {
-		t.Fatalf("got %d project roots, want 3: %+v", len(roots), roots)
+	if len(roots) != 2 {
+		t.Fatalf("got %d project roots, want 2: %+v", len(roots), roots)
 	}
 	for _, r := range roots {
 		if r.Scope != adapters.ScopeProject {

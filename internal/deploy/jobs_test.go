@@ -76,6 +76,11 @@ func TestCreate_Validation(t *testing.T) {
 	if _, err := s.Create(ctx, CreateParams{Operation: OpInstall, RequestJSON: "{}"}, now); err != ErrEmptyDeviceID {
 		t.Errorf("empty device: err = %v, want ErrEmptyDeviceID", err)
 	}
+	for _, op := range []Operation{OpRegisterRoot, OpRemoveRoot} {
+		if _, err := s.Create(ctx, CreateParams{DeviceID: dev, Operation: op, RequestJSON: "{}"}, now); err != nil {
+			t.Errorf("%s operation rejected: %v", op, err)
+		}
+	}
 	if _, err := s.Create(ctx, CreateParams{DeviceID: dev, Operation: "remove", RequestJSON: "{}"}, now); err == nil {
 		t.Error("invalid operation accepted")
 	}

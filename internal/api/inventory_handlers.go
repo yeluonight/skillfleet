@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/yeluonight/skillfleet/internal/devices"
+	"github.com/yeluonight/skillfleet/internal/inventory"
 )
 
 // inventorySkillView is one row of the device's skill matrix.
@@ -33,12 +35,13 @@ type inventoryWarning struct {
 
 // inventoryRunView summarises the latest run plus the full skill list.
 type inventoryRunView struct {
-	RunID        string               `json:"run_id"`
-	StartedAt    int64                `json:"started_at"`
-	SkillCount   int                  `json:"skill_count"`
-	RootCount    int                  `json:"root_count"`
-	AgentVersion string               `json:"agent_version,omitempty"`
-	Skills       []inventorySkillView `json:"skills"`
+	RunID        string                    `json:"run_id"`
+	StartedAt    int64                     `json:"started_at"`
+	SkillCount   int                       `json:"skill_count"`
+	RootCount    int                       `json:"root_count"`
+	AgentVersion string                    `json:"agent_version,omitempty"`
+	Roots        []inventory.RootCandidate `json:"roots,omitempty"`
+	Skills       []inventorySkillView      `json:"skills"`
 }
 
 // handleDeviceInventory returns the latest inventory run for a device,
@@ -73,12 +76,13 @@ func (d Deps) handleDeviceInventory(w http.ResponseWriter, r *http.Request) {
 		skillCount   int
 		rootCount    int
 		agentVersion sql.NullString
+		rootsJSON    sql.NullString
 	)
 	err := d.DB.QueryRowContext(r.Context(), `
-		SELECT id, started_at, skill_count, root_count, agent_version
+		SELECT id, started_at, skill_count, root_count, agent_version, roots_json
 		  FROM inventory_runs WHERE device_id = ?
 		 ORDER BY created_at DESC LIMIT 1
-	`, id).Scan(&runID, &startedAt, &skillCount, &rootCount, &agentVersion)
+	`, id).Scan(&runID, &startedAt, &skillCount, &rootCount, &agentVersion, &rootsJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		// Device exists but has never reported inventory.
 		writeJSON(w, http.StatusOK, map[string]any{"run": nil})
@@ -86,6 +90,13 @@ func (d Deps) handleDeviceInventory(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		d.logErr("inventory: run lookup", err)
+		writeError(w, http.StatusInternalServerError, "internal_error", "internal error")
+		return
+	}
+
+	roots, err := decodeInventoryRoots(rootsJSON)
+	if err != nil {
+		d.logErr("inventory: roots decode", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "internal error")
 		return
 	}
@@ -104,9 +115,21 @@ func (d Deps) handleDeviceInventory(w http.ResponseWriter, r *http.Request) {
 			SkillCount:   skillCount,
 			RootCount:    rootCount,
 			AgentVersion: agentVersion.String,
+			Roots:        roots,
 			Skills:       skills,
 		},
 	})
+}
+
+func decodeInventoryRoots(raw sql.NullString) ([]inventory.RootCandidate, error) {
+	if !raw.Valid || raw.String == "" {
+		return nil, nil
+	}
+	var roots []inventory.RootCandidate
+	if err := json.Unmarshal([]byte(raw.String), &roots); err != nil {
+		return nil, fmt.Errorf("decode roots_json: %w", err)
+	}
+	return roots, nil
 }
 
 // loadInventorySkills reads all discovered_skills for a run, ordered

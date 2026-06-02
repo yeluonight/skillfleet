@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+
+	"github.com/yeluonight/skillfleet/internal/inventory"
 )
 
 func TestDeployPlan_BuildsPlan(t *testing.T) {
@@ -35,6 +37,90 @@ func TestDeployPlan_BuildsPlan(t *testing.T) {
 	}
 	if got.Plan.ContentSHA256 == "" {
 		t.Error("plan.content_sha256 is empty")
+	}
+}
+
+func TestDeployPlan_SharedTargetReturnsHint(t *testing.T) {
+	srv, d, reg, _, _ := newTestServerWithSource(t)
+	sc, cc := setupAndLogin(t, srv, d, "alice", "correcthorsebatterystaple")
+	v := publishVersion(t, reg, "deploy-helper", oneSkillFile("deploy-helper", "deploy helper v1"))
+	seedDeployTestDevice(t, d, "dev1")
+
+	req := newJSONReq(t, http.MethodPost, srv.URL+"/api/deployments/plan", map[string]string{
+		"skill_name": "deploy-helper",
+		"version_id": v.ID,
+		"tool_key":   "agents",
+		"scope":      "user",
+		"device_id":  "dev1",
+	})
+	resp := authedDo(t, sc, cc, req)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	var got planResponse
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Hint == nil || got.Hint.Shared == nil {
+		t.Fatalf("hint = %#v, want shared hint", got.Hint)
+	}
+	if len(got.Hint.Shared.Readers) == 0 {
+		t.Fatal("shared readers empty")
+	}
+	if got.Hint.Shared.AlreadyCovered {
+		t.Fatal("already_covered = true without inventory coverage")
+	}
+}
+
+func TestDeployPlan_SharedTargetAlreadyCovered(t *testing.T) {
+	srv, d, reg, _, _ := newTestServerWithSource(t)
+	sc, cc := setupAndLogin(t, srv, d, "alice", "correcthorsebatterystaple")
+	v := publishVersion(t, reg, "deploy-helper", oneSkillFile("deploy-helper", "deploy helper v1"))
+	seedDeployTestDevice(t, d, "dev1")
+	storeReport(t, d, "dev1", inventory.Report{
+		AgentVersion: "0.12.0",
+		Tools: []inventory.ToolInstance{
+			{
+				ToolKey: "agents", DisplayName: "Shared Agent Skills", Scope: "user",
+				RootID: "agents_user", RootPath: "/h/.agents/skills",
+				Skills: []inventory.Skill{
+					{Name: "deploy-helper", SkillPath: "/h/.agents/skills/deploy-helper", HasSkillMD: true,
+						EffectiveState: "unknown", NativeState: "unknown", ContentSHA256: v.ContentSHA256},
+				},
+			},
+		},
+		Roots: []inventory.RootCandidate{
+			{ToolKey: "agents", Scope: "user", Path: "/h/.agents/skills", Exists: true, Registered: true, RootID: "agents_user", Shared: true},
+		},
+	})
+
+	req := newJSONReq(t, http.MethodPost, srv.URL+"/api/deployments/plan", map[string]string{
+		"skill_name": "deploy-helper",
+		"version_id": v.ID,
+		"tool_key":   "codex",
+		"scope":      "user",
+		"device_id":  "dev1",
+	})
+	resp := authedDo(t, sc, cc, req)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	var got planResponse
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Hint == nil || got.Hint.Shared == nil {
+		t.Fatalf("hint = %#v, want shared hint", got.Hint)
+	}
+	if !got.Hint.Shared.AlreadyCovered {
+		t.Fatal("already_covered = false, want true")
+	}
+	if got.Hint.Shared.CoveredByRootID != "agents_user" {
+		t.Fatalf("covered_by_root_id = %q, want agents_user", got.Hint.Shared.CoveredByRootID)
 	}
 }
 

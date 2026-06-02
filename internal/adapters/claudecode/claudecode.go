@@ -21,8 +21,8 @@
 //  2. SKILL.md frontmatter — the skill author's default intent, read only
 //     when no override covers the skill. Two booleans:
 //
-//	disable-model-invocation  (default false) — model auto-trigger off
-//	user-invocable            (default true)  — user can invoke
+//     disable-model-invocation  (default false) — model auto-trigger off
+//     user-invocable            (default true)  — user can invoke
 //
 // Reading the override first is what makes the scan side agree with the
 // write side: Phase 9 writes skillOverrides, so the scan must read it back
@@ -47,7 +47,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/yeluonight/skillfleet/internal/adapters"
 	"github.com/yeluonight/skillfleet/internal/skillmd"
@@ -88,37 +87,25 @@ var _ adapters.ReadOnlyAdapter = (*Adapter)(nil)
 func (a *Adapter) Key() string         { return toolKey }
 func (a *Adapter) DisplayName() string { return displayName }
 
+// rootSpecs enumerates Claude Code's scan locations in deterministic order.
+var rootSpecs = []adapters.RootSpec{
+	{IDBase: "claude_user", Scope: adapters.ScopeUser, Tmpl: "~/.claude/skills"},
+	{IDBase: "claude_project", Scope: adapters.ScopeProject, Tmpl: ".claude/skills"},
+}
+
 // SkillRoots resolves ~/.claude/skills (user) plus a .claude/skills
 // under each registered project root. Roots whose directory does not
 // exist are omitted so an uninstalled tool yields nothing.
 func (a *Adapter) SkillRoots(sc adapters.ScanContext) ([]adapters.SkillRoot, error) {
-	var roots []adapters.SkillRoot
+	return adapters.SkillRootsFromSpecs(sc, toolKey, rootSpecs)
+}
 
-	userPath, err := adapters.ExpandHome("~/.claude/skills", sc.HomeDir)
-	if err != nil {
-		return nil, err
-	}
-	if adapters.DirExists(userPath) {
-		roots = append(roots, adapters.SkillRoot{
-			ID:    "claude_user",
-			Tool:  toolKey,
-			Scope: adapters.ScopeUser,
-			Path:  userPath,
-		})
-	}
-
-	for i, proj := range sc.ProjectRoots {
-		projPath := filepath.Join(proj, ".claude", "skills")
-		if adapters.DirExists(projPath) {
-			roots = append(roots, adapters.SkillRoot{
-				ID:    "claude_project_" + strconv.Itoa(i),
-				Tool:  toolKey,
-				Scope: adapters.ScopeProject,
-				Path:  projPath,
-			})
-		}
-	}
-	return roots, nil
+// CandidateRoots suggests Claude Code's skills dir for registration,
+// listed whether or not it exists. ToolDetected is true when ~/.claude
+// is present (the install left a config dir even if skills/ is empty).
+func (a *Adapter) CandidateRoots(sc adapters.ScanContext) []adapters.CandidateRoot {
+	detected := adapters.ConfigDirExists(sc.HomeDir, "~/.claude")
+	return adapters.BuildCandidateRootsFromRootSpecs(sc, toolKey, detected, rootSpecs)
 }
 
 // ScanSkills walks one root using the shared standard-layout scanner.

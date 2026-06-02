@@ -12,6 +12,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -67,7 +68,8 @@ type deployRequestBody struct {
 // planResponse echoes the resolved plan (dry-run) so the operator can
 // preview what would be written before committing a job.
 type planResponse struct {
-	Plan deploy.Plan `json:"plan"`
+	Plan deploy.Plan      `json:"plan"`
+	Hint *deploy.PlanHint `json:"hint,omitempty"`
 }
 
 // handleDeployPlan resolves an install request into a Plan WITHOUT
@@ -81,12 +83,12 @@ func (d Deps) handleDeployPlan(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	plan, err := d.planInstall(r.Context(), body)
+	plan, hint, err := d.planInstallWithHint(r.Context(), body)
 	if err != nil {
 		writePlanError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, planResponse{Plan: plan})
+	writeJSON(w, http.StatusOK, planResponse{Plan: plan, Hint: hint})
 }
 
 // handleDeployExecute plans the install and creates a pending job for the
@@ -383,6 +385,20 @@ func (d Deps) handleListDeployments(w http.ResponseWriter, r *http.Request) {
 // fresh stateless Planner over the registry adapter and resolves the
 // request body into a Plan.
 func (d Deps) planInstall(ctx context.Context, body deployRequestBody) (deploy.Plan, error) {
+	return d.resolveInstallPlan(ctx, body)
+}
+
+// planInstallWithHint resolves an install plan and optionally attaches UI-only
+// advisory hints for shared .agents/skills targets.
+func (d Deps) planInstallWithHint(ctx context.Context, body deployRequestBody) (deploy.Plan, *deploy.PlanHint, error) {
+	plan, err := d.resolveInstallPlan(ctx, body)
+	if err != nil {
+		return deploy.Plan{}, nil, err
+	}
+	return plan, d.sharedPlanHint(ctx, body, plan), nil
+}
+
+func (d Deps) resolveInstallPlan(ctx context.Context, body deployRequestBody) (deploy.Plan, error) {
 	planner := deploy.NewPlanner(registryReader{reg: d.Registry})
 	return planner.PlanInstall(ctx, deploy.Request{
 		Operation: deploy.OpInstall,
@@ -390,6 +406,55 @@ func (d Deps) planInstall(ctx context.Context, body deployRequestBody) (deploy.P
 		VersionID: body.VersionID,
 		Target:    deploy.Target{ToolKey: body.ToolKey, Scope: body.Scope, RootID: body.RootID},
 	}, markerSourceFor(body), d.Now())
+}
+
+// sharedPlanHint builds the UI-only shared-directory hint for an install plan.
+func (d Deps) sharedPlanHint(ctx context.Context, body deployRequestBody, plan deploy.Plan) *deploy.PlanHint {
+	if !deploy.ReadsSharedAgents(body.ToolKey) {
+		return nil
+	}
+	shared := &deploy.SharedHint{Readers: deploy.SharedAgentReaders()}
+	if body.DeviceID == "" || d.DB == nil || plan.SkillName == "" {
+		return &deploy.PlanHint{Shared: shared}
+	}
+	rootID, ok, err := d.findCoveredSharedRoot(ctx, body.DeviceID, body.Scope, plan.SkillName, plan.ContentSHA256)
+	if err != nil {
+		d.logErr("deploy shared hint", err)
+		return &deploy.PlanHint{Shared: shared}
+	}
+	if ok {
+		shared.AlreadyCovered = true
+		shared.CoveredByRootID = rootID
+	}
+	return &deploy.PlanHint{Shared: shared}
+}
+
+func (d Deps) findCoveredSharedRoot(ctx context.Context, deviceID, scope, skillName, contentSHA string) (string, bool, error) {
+	if d.DB == nil {
+		return "", false, nil
+	}
+	var rootID sql.NullString
+	err := d.DB.QueryRowContext(ctx, `
+		SELECT ti.root_id
+		  FROM discovered_skills ds
+		  JOIN tool_instances ti ON ti.id = ds.tool_instance_id
+		 WHERE ds.device_id = ?
+		   AND ds.tool_key = 'agents'
+		   AND (? = '' OR ds.scope = ?)
+		   AND ds.name = ?
+		   AND ds.content_sha256 = ?
+		 LIMIT 1
+	`, deviceID, scope, scope, skillName, contentSHA).Scan(&rootID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if !rootID.Valid || rootID.String == "" {
+		return "", false, nil
+	}
+	return rootID.String, true, nil
 }
 
 // markerSourceFor is a placeholder for deriving the install marker's

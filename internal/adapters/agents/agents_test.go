@@ -1,4 +1,4 @@
-package antigravitycli
+package agents
 
 import (
 	"context"
@@ -27,18 +27,24 @@ type expectedDoc struct {
 	Skills []expectedSkill `json:"skills"`
 }
 
+func fixtureRoot(t *testing.T) string {
+	t.Helper()
+	abs, err := filepath.Abs(filepath.Join("..", "..", "..", "fixtures", "agents"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return abs
+}
+
 func TestAdapter_Identity(t *testing.T) {
 	a := New()
-	if a.Key() != "antigravity-cli" || a.DisplayName() != "Antigravity CLI" {
+	if a.Key() != "agents" || a.DisplayName() != "Shared Agent Skills" {
 		t.Errorf("identity = %q / %q", a.Key(), a.DisplayName())
 	}
 }
 
 func TestScanSkills_MatchesFixtureExpected(t *testing.T) {
-	root, err := filepath.Abs(filepath.Join("..", "..", "..", "fixtures", "antigravity-cli"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	root := fixtureRoot(t)
 	raw, err := os.ReadFile(filepath.Join(root, "expected.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -82,53 +88,73 @@ func TestScanSkills_MatchesFixtureExpected(t *testing.T) {
 	}
 }
 
-func TestSkillRoots_TwoUserRoots(t *testing.T) {
+func TestSkillRoots_UserScope(t *testing.T) {
 	home := t.TempDir()
-	for _, rel := range []string{".gemini/antigravity-cli/skills", ".gemini/skills"} {
-		if err := os.MkdirAll(filepath.Join(home, rel), 0o755); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.MkdirAll(filepath.Join(home, ".agents", "skills"), 0o755); err != nil {
+		t.Fatal(err)
 	}
-	a := New()
-	roots, err := a.SkillRoots(adapters.ScanContext{Ctx: context.Background(), HomeDir: home})
+	roots, err := New().SkillRoots(adapters.ScanContext{Ctx: context.Background(), HomeDir: home})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(roots) != 2 {
-		t.Fatalf("got %d user roots, want 2: %+v", len(roots), roots)
-	}
-	for _, r := range roots {
-		if r.Scope != adapters.ScopeUser {
-			t.Errorf("root %s scope = %s", r.ID, r.Scope)
-		}
+	if len(roots) != 1 || roots[0].ID != "agents_user" || roots[0].Scope != adapters.ScopeUser {
+		t.Fatalf("roots = %+v", roots)
 	}
 }
 
-func TestSkillRoots_ProjectAgentsIgnored(t *testing.T) {
+func TestSkillRoots_ProjectScope(t *testing.T) {
 	home := t.TempDir()
 	proj := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(proj, ".agents", "skills"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	a := New()
-	roots, err := a.SkillRoots(adapters.ScanContext{
+	roots, err := New().SkillRoots(adapters.ScanContext{
 		Ctx: context.Background(), HomeDir: home, ProjectRoots: []string{proj},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(roots) != 0 {
-		t.Errorf("roots = %+v, want no .agents duplicate", roots)
+	if len(roots) != 1 || roots[0].ID != "agents_project_0" || roots[0].Scope != adapters.ScopeProject {
+		t.Fatalf("roots = %+v", roots)
 	}
 }
 
 func TestSkillRoots_NoneWhenUninstalled(t *testing.T) {
-	a := New()
-	roots, err := a.SkillRoots(adapters.ScanContext{Ctx: context.Background(), HomeDir: t.TempDir()})
+	roots, err := New().SkillRoots(adapters.ScanContext{Ctx: context.Background(), HomeDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(roots) != 0 {
 		t.Errorf("got %d roots, want 0", len(roots))
+	}
+}
+
+func TestCandidateRoots(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".agents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cands := New().CandidateRoots(adapters.ScanContext{HomeDir: home})
+	if len(cands) != 1 {
+		t.Fatalf("got %d candidates, want 1", len(cands))
+	}
+	c := cands[0]
+	if c.ToolKey != "agents" || c.Scope != adapters.ScopeUser {
+		t.Errorf("candidate identity = %q/%q", c.ToolKey, c.Scope)
+	}
+	if c.DisplayTmpl != "~/.agents/skills" {
+		t.Errorf("displayTmpl = %q", c.DisplayTmpl)
+	}
+	if c.Path != filepath.Join(home, ".agents", "skills") {
+		t.Errorf("path = %q", c.Path)
+	}
+	if c.Exists {
+		t.Error("skills/ does not exist; Exists should be false")
+	}
+	if !c.ToolDetected {
+		t.Error("~/.agents present; ToolDetected should be true")
+	}
+	if !c.Shared {
+		t.Error("shared directory candidate should be Shared")
 	}
 }

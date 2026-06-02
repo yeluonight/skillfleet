@@ -74,6 +74,10 @@ func TestDownlinkEnvelopeFieldNames(t *testing.T) {
 	if got, want := string(jr), `{"status":"succeeded","result_json":"{}"}`; got != want {
 		t.Errorf("JobResult wire = %s, want %s", got, want)
 	}
+	rootReq, _ := json.Marshal(Request{Operation: OpRegisterRoot, Target: Target{ToolKey: "codex", Scope: "user"}, RootPath: "/h/.agents/skills"})
+	if got, want := string(rootReq), `{"operation":"register_root","target":{"tool_key":"codex","scope":"user"},"root_path":"/h/.agents/skills"}`; got != want {
+		t.Errorf("register_root request wire = %s, want %s", got, want)
+	}
 }
 
 func keysOf(m map[string]json.RawMessage) []string {

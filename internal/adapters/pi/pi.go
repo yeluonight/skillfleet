@@ -3,22 +3,19 @@
 //
 // Roots scanned:
 //
-//	~/.pi/agent/skills      (user scope)
-//	~/.agents/skills        (user scope)
-//	<project>/.pi/skills    (project scope)
-//	<project>/.agents/skills (project scope)
-//	<project>/skills        (project scope)
+//	~/.pi/agent/skills   (user scope)
+//	<project>/.pi/skills (project scope)
+//	<project>/skills     (project scope)
 //
 // The package.json -> pi.skills and settings.json -> skills[] indirection
 // from the spec are deferred: Phase 3 covers the directory-convention
 // roots, which are the common case. A discovered skill directory is
 // reported available/on; Pi has no file-readable disable signal at
-// scan time.
+// scan time. Shared .agents/skills content is represented by the
+// dedicated agents adapter, not duplicated here.
 package pi
 
 import (
-	"path/filepath"
-
 	"github.com/yeluonight/skillfleet/internal/adapters"
 	"github.com/yeluonight/skillfleet/internal/skillmd"
 )
@@ -29,6 +26,13 @@ const (
 
 	nativeAvailable = "available"
 )
+
+// rootSpecs enumerates Pi's scan locations in deterministic order.
+var rootSpecs = []adapters.RootSpec{
+	{IDBase: "pi_user_agent", Scope: adapters.ScopeUser, Tmpl: "~/.pi/agent/skills"},
+	{IDBase: "pi_project_pi", Scope: adapters.ScopeProject, Tmpl: ".pi/skills"},
+	{IDBase: "pi_project_skills", Scope: adapters.ScopeProject, Tmpl: "skills"},
+}
 
 // Adapter is the read-only Pi adapter.
 type Adapter struct{}
@@ -41,50 +45,14 @@ func (a *Adapter) Key() string         { return toolKey }
 func (a *Adapter) DisplayName() string { return displayName }
 
 func (a *Adapter) SkillRoots(sc adapters.ScanContext) ([]adapters.SkillRoot, error) {
-	var roots []adapters.SkillRoot
+	return adapters.SkillRootsFromSpecs(sc, toolKey, rootSpecs)
+}
 
-	userSpecs := []struct {
-		id  string
-		rel string
-	}{
-		{"pi_user_agent", "~/.pi/agent/skills"},
-		{"pi_user_agents", "~/.agents/skills"},
-	}
-	for _, spec := range userSpecs {
-		p, err := adapters.ExpandHome(spec.rel, sc.HomeDir)
-		if err != nil {
-			return nil, err
-		}
-		if adapters.DirExists(p) {
-			roots = append(roots, adapters.SkillRoot{
-				ID: spec.id, Tool: toolKey, Scope: adapters.ScopeUser, Path: p,
-			})
-		}
-	}
-
-	// Project-scope conventions, in spec order.
-	projectRels := []struct {
-		idBase string
-		rel    string
-	}{
-		{"pi_project_pi", ".pi/skills"},
-		{"pi_project_agents", ".agents/skills"},
-		{"pi_project_skills", "skills"},
-	}
-	for i, proj := range sc.ProjectRoots {
-		for _, spec := range projectRels {
-			p := filepath.Join(proj, filepath.FromSlash(spec.rel))
-			if adapters.DirExists(p) {
-				roots = append(roots, adapters.SkillRoot{
-					ID:    adapters.ProjectRootID(spec.idBase, i),
-					Tool:  toolKey,
-					Scope: adapters.ScopeProject,
-					Path:  p,
-				})
-			}
-		}
-	}
-	return roots, nil
+// CandidateRoots suggests Pi's user skill roots for registration.
+// Detected when ~/.pi exists or a `pi` binary is on PATH.
+func (a *Adapter) CandidateRoots(sc adapters.ScanContext) []adapters.CandidateRoot {
+	detected := adapters.ConfigDirExists(sc.HomeDir, "~/.pi") || adapters.BinaryOnPath("pi")
+	return adapters.BuildCandidateRootsFromRootSpecs(sc, toolKey, detected, rootSpecs)
 }
 
 func (a *Adapter) ScanSkills(sc adapters.ScanContext, root adapters.SkillRoot) ([]adapters.DiscoveredSkill, error) {

@@ -140,6 +140,10 @@ func NewRouter(d Deps) http.Handler {
 		d.requireAuth(d.requireCSRF(http.HandlerFunc(d.handleRevokeDevice))))
 	mux.Handle("GET /api/devices/{id}/inventory",
 		d.requireAuth(http.HandlerFunc(d.handleDeviceInventory)))
+	mux.Handle("POST /api/devices/{id}/roots",
+		d.requireAuth(d.requireCSRF(http.HandlerFunc(d.handleRegisterDeviceRoot))))
+	mux.Handle("POST /api/devices/{id}/roots/{rootId}/remove",
+		d.requireAuth(d.requireCSRF(http.HandlerFunc(d.handleRemoveDeviceRoot))))
 
 	// Device drift (phase 7 t3, v1.0 §8.2): classify a device's latest
 	// inventory run against the registry by content_sha256 — clean /

@@ -3,6 +3,7 @@ package inventory
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -58,6 +59,10 @@ func sampleReport() Report {
 				},
 			},
 		},
+		Roots: []RootCandidate{
+			{ToolKey: "claude-code", Scope: "user", Path: "/home/me/.claude/skills", Exists: true, Registered: true, RootID: "claude_user", ToolDetected: true},
+			{ToolKey: "codex", Scope: "system", Path: "/etc/codex/skills", Exists: false, Shared: true},
+		},
 	}
 }
 
@@ -76,12 +81,23 @@ func TestStore_HappyPath(t *testing.T) {
 	// inventory_runs row.
 	var skillCount, rootCount int
 	var agentVer string
-	if err := d.QueryRow(`SELECT skill_count, root_count, agent_version FROM inventory_runs WHERE id=?`, res.RunID).
-		Scan(&skillCount, &rootCount, &agentVer); err != nil {
+	var rootsJSON sql.NullString
+	if err := d.QueryRow(`SELECT skill_count, root_count, agent_version, roots_json FROM inventory_runs WHERE id=?`, res.RunID).
+		Scan(&skillCount, &rootCount, &agentVer, &rootsJSON); err != nil {
 		t.Fatal(err)
 	}
 	if skillCount != 3 || rootCount != 2 || agentVer != "0.3.0" {
 		t.Errorf("run row = %d/%d/%q", skillCount, rootCount, agentVer)
+	}
+	if !rootsJSON.Valid || rootsJSON.String == "" {
+		t.Fatal("roots_json should be populated")
+	}
+	var roots []RootCandidate
+	if err := json.Unmarshal([]byte(rootsJSON.String), &roots); err != nil {
+		t.Fatal(err)
+	}
+	if len(roots) != 2 || roots[0].RootID != "claude_user" || roots[1].Shared != true {
+		t.Errorf("roots_json round-trip = %+v", roots)
 	}
 
 	// tool_instances + discovered_skills counts.
@@ -178,6 +194,37 @@ func TestStore_RejectsInvalidScope(t *testing.T) {
 	_ = d.QueryRow(`SELECT COUNT(*) FROM inventory_runs WHERE device_id='dev1'`).Scan(&n)
 	if n != 0 {
 		t.Errorf("rejected report should write nothing, got %d runs", n)
+	}
+}
+
+func TestStore_RejectsInvalidRootCandidate(t *testing.T) {
+	d := newDB(t)
+	tests := []struct {
+		name string
+		root RootCandidate
+	}{
+		{name: "empty tool", root: RootCandidate{Scope: "user", Path: "/p"}},
+		{name: "project scope", root: RootCandidate{ToolKey: "x", Scope: "project", Path: "/p"}},
+		{name: "empty path", root: RootCandidate{ToolKey: "x", Scope: "user"}},
+		{name: "relative path", root: RootCandidate{ToolKey: "x", Scope: "user", Path: "relative"}},
+		{name: "registered without id", root: RootCandidate{ToolKey: "x", Scope: "user", Path: "/p", Registered: true}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			bad := Report{Roots: []RootCandidate{tc.root}}
+			_, err := Store(context.Background(), d, "dev1", bad, time.Unix(1, 0))
+			if !errors.Is(err, ErrInvalidReport) {
+				t.Errorf("err = %v, want ErrInvalidReport", err)
+			}
+		})
+	}
+}
+
+func TestStore_AcceptsWindowsRootCandidatePath(t *testing.T) {
+	d := newDB(t)
+	rep := Report{Roots: []RootCandidate{{ToolKey: "claude-code", Scope: "user", Path: `C:\\Users\\me\\.claude\\skills`}}}
+	if _, err := Store(context.Background(), d, "dev1", rep, time.Unix(1, 0)); err != nil {
+		t.Fatalf("Store with Windows path: %v", err)
 	}
 }
 

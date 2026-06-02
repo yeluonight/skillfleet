@@ -14,6 +14,7 @@ import (
 	"os"
 
 	"github.com/yeluonight/skillfleet/internal/adapters"
+	"github.com/yeluonight/skillfleet/internal/adapters/agents"
 	"github.com/yeluonight/skillfleet/internal/adapters/antigravity"
 	"github.com/yeluonight/skillfleet/internal/adapters/antigravitycli"
 	"github.com/yeluonight/skillfleet/internal/adapters/claudecode"
@@ -28,6 +29,7 @@ import (
 func All() []adapters.ReadOnlyAdapter {
 	return []adapters.ReadOnlyAdapter{
 		claudecode.New(),
+		agents.New(),
 		codex.New(),
 		opencode.New(),
 		antigravity.New(),

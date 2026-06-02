@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -132,5 +135,54 @@ func TestRoots_RequiresEnrolledConfig(t *testing.T) {
 	err := runRoots([]string{"list", "-config", missing})
 	if err == nil || !strings.Contains(err.Error(), "enroll") {
 		t.Errorf("want enroll-first hint, got %v", err)
+	}
+}
+
+func TestParseRootSelection(t *testing.T) {
+	got, err := parseRootSelection("1,3-4 3", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int{0, 2, 3}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("selection = %v, want %v", got, want)
+	}
+	if _, err := parseRootSelection("2-1", 5); err == nil || !strings.Contains(err.Error(), "descending") {
+		t.Fatalf("want descending range error, got %v", err)
+	}
+	if _, err := parseRootSelection("6", 5); err == nil || !strings.Contains(err.Error(), "out of range") {
+		t.Fatalf("want out-of-range error, got %v", err)
+	}
+}
+
+func TestRootsScanRegistersExistingCandidate(t *testing.T) {
+	cfgPath := seedEnrolledConfig(t)
+	home := t.TempDir()
+	oldHome := os.Getenv("HOME")
+	t.Setenv("HOME", home)
+	if oldHome == "" {
+		t.Setenv("USERPROFILE", home)
+	}
+	candidate := filepath.Join(home, ".claude", "skills")
+	if err := os.MkdirAll(candidate, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	if err := runRootsScanInteractive([]string{"-config", cfgPath}, strings.NewReader("all\n"), &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := agentcfg.Load(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.AllowedRoots) != 1 {
+		t.Fatalf("roots = %+v", cfg.AllowedRoots)
+	}
+	if cfg.AllowedRoots[0].Path != candidate || cfg.AllowedRoots[0].Tool != "claude-code" {
+		t.Fatalf("root = %+v", cfg.AllowedRoots[0])
+	}
+	if !strings.Contains(out.String(), candidate) || !strings.Contains(errOut.String(), "added root") {
+		t.Fatalf("out=%q err=%q", out.String(), errOut.String())
 	}
 }

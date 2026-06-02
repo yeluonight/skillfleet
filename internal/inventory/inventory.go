@@ -20,6 +20,31 @@ type Report struct {
 
 	// Tools is one entry per (tool, scope-root) the agent scanned.
 	Tools []ToolInstance `json:"tools"`
+
+	// Roots is the agent's candidate-root discovery: every user/system
+	// location a tool COULD keep skills, whether or not it exists, joined
+	// with which are already registered in the agent's allowed_roots
+	// (Phase 11). The server stores this so the WebUI can offer one-click
+	// registration. Distinct from Tools, which only lists existing
+	// scanned roots; Roots also lists not-yet-created suggestions.
+	Roots []RootCandidate `json:"roots,omitempty"`
+}
+
+// RootCandidate is one discoverable skill location reported to the
+// server for the WebUI's registration UI. It mirrors
+// adapters.CandidateRoot plus the Registered/RootID join the agent
+// computes against its own allowed_roots — the server never resolves
+// paths itself, it only displays what the agent reports.
+type RootCandidate struct {
+	ToolKey      string `json:"tool_key"`
+	Scope        string `json:"scope"` // user | system (project omitted this phase)
+	Path         string `json:"path"`  // absolute, ~-expanded
+	DisplayTmpl  string `json:"display_tmpl,omitempty"`
+	Exists       bool   `json:"exists"`
+	Registered   bool   `json:"registered"`
+	RootID       string `json:"root_id,omitempty"` // set when Registered
+	ToolDetected bool   `json:"tool_detected,omitempty"`
+	Shared       bool   `json:"shared,omitempty"`
 }
 
 // ToolInstance is one scanned root: a tool at a particular scope and

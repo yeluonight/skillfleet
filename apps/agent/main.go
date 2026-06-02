@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/yeluonight/skillfleet/internal/agentcandidates"
 	"github.com/yeluonight/skillfleet/internal/agentcfg"
 	"github.com/yeluonight/skillfleet/internal/agentclient"
 	"github.com/yeluonight/skillfleet/internal/agentscan"
@@ -133,11 +134,11 @@ func runLoop(args []string) error {
 	}()
 	go func() {
 		defer wg.Done()
-		runInventory(ctx, log, client, invInterval, version())
+		runInventory(ctx, log, client, invInterval, version(), *configPath)
 	}()
 	go func() {
 		defer wg.Done()
-		runJobs(ctx, log, client, jobsInterval, cfg)
+		runJobs(ctx, log, client, jobsInterval, *configPath)
 	}()
 	wg.Wait()
 
@@ -236,7 +237,7 @@ func runHeartbeat(ctx context.Context, log *slog.Logger, client *agentclient.Cli
 //
 // A scan + upload that the device isn't approved for is expected during
 // the approval window and logged at INFO, mirroring heartbeat.
-func runInventory(ctx context.Context, log *slog.Logger, client *agentclient.Client, interval time.Duration, agentVer string) {
+func runInventory(ctx context.Context, log *slog.Logger, client *agentclient.Client, interval time.Duration, agentVer string, configPath string) {
 	lastCount := -1
 
 	run := func() {
@@ -244,6 +245,15 @@ func runInventory(ctx context.Context, log *slog.Logger, client *agentclient.Cli
 			AgentVersion: agentVer,
 			Logger:       log,
 		})
+		// Attach candidate-root discovery so the WebUI can offer one-click
+		// registration. Reload allowed_roots each run so a register_root job is
+		// reflected in the next inventory upload without restarting the agent.
+		cfg, err := agentcfg.Load(configPath)
+		if err != nil {
+			log.Warn("inventory config reload failed", slog.String("err", err.Error()))
+		} else {
+			report.Roots = agentcandidates.Discover("", cfg.AllowedRoots)
+		}
 
 		invCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
@@ -366,6 +376,7 @@ func printUsage(w *os.File) {
 	_, _ = fmt.Fprintln(w, "  skillfleet-agent enroll [-name N] <server-url> <token>  # one-shot enrolment")
 	_, _ = fmt.Fprintln(w, "  skillfleet-agent roots list                         # list allowed skill roots")
 	_, _ = fmt.Fprintln(w, "  skillfleet-agent roots add -tool T -scope S -path P # register a skill root")
+	_, _ = fmt.Fprintln(w, "  skillfleet-agent roots scan                         # scan and select local roots")
 	_, _ = fmt.Fprintln(w, "  skillfleet-agent roots rm <id>                      # remove a skill root")
 	_, _ = fmt.Fprintln(w, "  skillfleet-agent -version                           # print version")
 }

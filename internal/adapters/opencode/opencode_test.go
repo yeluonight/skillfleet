@@ -147,8 +147,8 @@ func TestResolvePermission_ExactWinsOverGlob(t *testing.T) {
 
 func TestResolvePermission_LongerGlobWins(t *testing.T) {
 	perms := map[string]string{
-		"*":         "allow",
-		"danger-*":  "deny",
+		"*":        "allow",
+		"danger-*": "deny",
 	}
 	if got := resolvePermission(perms, "danger-wipe"); got != "deny" {
 		t.Errorf("longer glob should win: got %q, want deny", got)

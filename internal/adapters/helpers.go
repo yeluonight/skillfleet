@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -59,6 +60,28 @@ func DirExists(path string) bool {
 		return false
 	}
 	return info.IsDir()
+}
+
+// ConfigDirExists reports whether a ~-relative config directory exists,
+// e.g. ConfigDirExists(home, "~/.claude") for the Claude Code install
+// hint. It is the preferred installed-heuristic signal because a tool's
+// config dir survives across shells and service contexts, unlike PATH.
+// A path that cannot be expanded (no home dir) reports false.
+func ConfigDirExists(homeDir, rel string) bool {
+	p, err := ExpandHome(rel, homeDir)
+	if err != nil {
+		return false
+	}
+	return DirExists(p)
+}
+
+// BinaryOnPath reports whether name resolves on the current PATH. It is
+// a SECONDARY install hint only: a service-context PATH often differs
+// from an interactive shell's, so a false here does not mean "not
+// installed". Adapters prefer ConfigDirExists and fall back to this.
+func BinaryOnPath(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
 }
 
 // ScanStandardRoot implements the common layout: every immediate child

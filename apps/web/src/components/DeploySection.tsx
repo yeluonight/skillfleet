@@ -1,6 +1,7 @@
-import { useState } from "react"
-import { Rocket, Send } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { AlertCircle, Info, Rocket, Send } from "lucide-react"
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,14 +15,21 @@ import { JobsList } from "@/components/JobsList"
 import { api, apiErrorMessage } from "@/lib/api"
 import { useApiResource } from "@/hooks/useApiResource"
 import { useAsyncAction } from "@/hooks/useAsyncAction"
-import type { Device, DeploymentJob, SkillVersion } from "@/lib/api"
+import type {
+  DeployPlanHint,
+  Device,
+  DeploymentJob,
+  InventorySkill,
+  RootCandidate,
+  SkillVersion,
+} from "@/lib/api"
 
 // DeploySection owns the deploy-to-device flow + this skill's job list
 // for one skill (phase 8). It is keyed by skill name at the call site so
 // its selection/poll state resets on skill switch. Every deployment
 // api.* call + CSRF + error handling lives here; JobsList is a pure
-// controlled view. The server addresses install targets by
-// {tool_key, scope}; the agent resolves them against its allowed roots.
+// controlled view. The server addresses install targets by root_id when
+// available, falling back to {tool_key, scope} for older inventory reports.
 export function DeploySection({
   skillName,
   versions,
@@ -33,10 +41,10 @@ export function DeploySection({
   const [versionId, setVersionId] = useState(versions[0]?.id ?? "")
   const [devices, setDevices] = useState<Device[]>([])
   const [deviceId, setDeviceId] = useState("")
-  // Target options for the chosen device, derived from its inventory
-  // (the tool_key + scope pairs the device actually reports).
-  const [targets, setTargets] = useState<{ toolKey: string; scope: string }[]>([])
+  const [targets, setTargets] = useState<DeployTarget[]>([])
   const [targetIdx, setTargetIdx] = useState(0)
+  const [planHint, setPlanHint] = useState<DeployPlanHint | null>(null)
+  const [planLoading, setPlanLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const deployAction = useAsyncAction()
 
@@ -63,9 +71,36 @@ export function DeploySection({
     { deps: [skillName], pollMs: 4000, errorFallback: "Failed to load deployment jobs." },
   )
   const jobs = jobsData?.jobs ?? []
+  const target = targets[targetIdx]
+  const canPreview = open && Boolean(versionId) && Boolean(deviceId) && Boolean(target)
+
+  useEffect(() => {
+    if (!canPreview || !target) {
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      setPlanLoading(true)
+      try {
+        const res = await api.planDeployment(deployBody(skillName, versionId, deviceId, target))
+        if (!cancelled) {
+          setPlanHint(res.hint ?? null)
+          setActionError(null)
+        }
+      } catch (err) {
+        if (!cancelled) setActionError(apiErrorMessage(err, "Failed to preview deployment plan."))
+      } finally {
+        if (!cancelled) setPlanLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [canPreview, deviceId, skillName, target, versionId])
 
   async function openDialog() {
     setActionError(null)
+    setPlanHint(null)
     setOpen(true)
     try {
       const res = await api.listDevices()
@@ -82,15 +117,10 @@ export function DeploySection({
 
   async function loadTargets(id: string) {
     setTargetIdx(0)
+    setPlanHint(null)
     try {
       const res = await api.deviceInventory(id)
-      // Dedup the device's reported (tool_key, scope) pairs into target options.
-      const byKey = new Map<string, { toolKey: string; scope: string }>()
-      for (const sk of res.run?.skills ?? []) {
-        const key = `${sk.tool_key} ${sk.scope}`
-        if (!byKey.has(key)) byKey.set(key, { toolKey: sk.tool_key, scope: sk.scope })
-      }
-      setTargets([...byKey.values()])
+      setTargets(targetsFromInventory(res.run?.roots ?? [], res.run?.skills ?? []))
     } catch {
       setTargets([])
     }
@@ -106,17 +136,9 @@ export function DeploySection({
       setActionError("Select a version and a device.")
       return
     }
-    const target = targets[targetIdx]
     setActionError(null)
     const ok = await deployAction.run(
-      () =>
-        api.executeDeployment({
-          skill_name: skillName,
-          version_id: versionId,
-          device_id: deviceId,
-          tool_key: target?.toolKey,
-          scope: target?.scope,
-        }),
+      () => api.executeDeployment(deployBody(skillName, versionId, deviceId, target)),
       "Failed to deploy.",
     )
     if (ok) {
@@ -136,6 +158,11 @@ export function DeploySection({
       setRollbackBusyId(null)
     }
   }
+
+  const sharedReaderNames = useMemo(
+    () => planHint?.shared?.readers?.map((reader) => reader.name).join(", ") ?? "",
+    [planHint],
+  )
 
   return (
     <div className="space-y-3 border-t pt-4">
@@ -202,7 +229,7 @@ export function DeploySection({
             </label>
 
             <label className="block text-sm">
-              <span className="text-muted-foreground mb-1 block text-xs">目标（工具 · scope）</span>
+              <span className="text-muted-foreground mb-1 block text-xs">目标 root</span>
               <select
                 className="bg-background h-9 w-full rounded-md border px-2 text-sm"
                 value={targetIdx}
@@ -210,19 +237,57 @@ export function DeploySection({
                 disabled={targets.length === 0}
               >
                 {targets.length === 0 ? (
-                  <option value={0}>该设备无可用目标（需先上报 inventory）</option>
+                  <option value={0}>该设备无可用目标（需先上报 inventory 并注册 root）</option>
                 ) : (
                   targets.map((t, i) => (
-                    <option key={`${t.toolKey}-${t.scope}`} value={i}>
+                    <option key={targetKey(t)} value={i}>
                       {t.toolKey} · {t.scope}
+                      {t.shared ? " · shared" : ""}
+                      {t.rootId ? ` · ${t.rootId}` : ""}
                     </option>
                   ))
                 )}
               </select>
             </label>
 
+            {target?.path ? (
+              <p className="text-muted-foreground break-all font-mono text-xs">{target.path}</p>
+            ) : null}
+
+            {planHint?.shared ? (
+              <Alert>
+                <Info className="size-4" aria-hidden />
+                <AlertTitle>Shared Agent Skills</AlertTitle>
+                <AlertDescription className="space-y-1">
+                  <p>
+                    该目标读取 .agents/skills。安装到共享 root 后，读取该目录的工具会看到同一份内容
+                    {sharedReaderNames ? `：${sharedReaderNames}` : "。"}
+                  </p>
+                  {planHint.shared.already_covered ? (
+                    <p>
+                      同名同内容已由共享 root {planHint.shared.covered_by_root_id ?? "agents"} 覆盖，通常无需再给该工具单独安装。
+                    </p>
+                  ) : null}
+                </AlertDescription>
+              </Alert>
+            ) : target?.shared ? (
+              <Alert>
+                <Info className="size-4" aria-hidden />
+                <AlertTitle>共享目录</AlertTitle>
+                <AlertDescription>
+                  这是 .agents/skills 共享 root；同一物理目录只需部署一次。
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
+            {planLoading ? <p className="text-muted-foreground text-xs">正在预览部署计划…</p> : null}
+
             {actionError ?? deployAction.error ? (
-              <p className="text-sm text-red-600">{actionError ?? deployAction.error}</p>
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" aria-hidden />
+                <AlertTitle>部署失败</AlertTitle>
+                <AlertDescription>{actionError ?? deployAction.error}</AlertDescription>
+              </Alert>
             ) : null}
           </div>
 
@@ -242,4 +307,47 @@ export function DeploySection({
       </Dialog>
     </div>
   )
+}
+
+type DeployTarget = {
+  toolKey: string
+  scope: string
+  rootId?: string
+  path?: string
+  shared?: boolean
+}
+
+function targetsFromInventory(roots: RootCandidate[], skills: InventorySkill[]): DeployTarget[] {
+  const registeredRoots = roots
+    .filter((root) => root.registered && root.exists)
+    .map((root) => ({
+      toolKey: root.tool_key,
+      scope: root.scope,
+      rootId: root.root_id,
+      path: root.path,
+      shared: root.shared,
+    }))
+  if (registeredRoots.length > 0) return registeredRoots
+
+  const byKey = new Map<string, DeployTarget>()
+  for (const sk of skills) {
+    const key = `${sk.tool_key} ${sk.scope}`
+    if (!byKey.has(key)) byKey.set(key, { toolKey: sk.tool_key, scope: sk.scope })
+  }
+  return [...byKey.values()]
+}
+
+function deployBody(skillName: string, versionId: string, deviceId: string, target?: DeployTarget) {
+  return {
+    skill_name: skillName,
+    version_id: versionId,
+    device_id: deviceId,
+    tool_key: target?.toolKey,
+    scope: target?.scope,
+    root_id: target?.rootId,
+  }
+}
+
+function targetKey(target: DeployTarget) {
+  return `${target.toolKey}:${target.scope}:${target.rootId ?? target.path ?? "fallback"}`
 }

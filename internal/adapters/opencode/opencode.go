@@ -12,12 +12,12 @@
 //     whose keys may be exact skill names OR globs:
 //
 //     {
-//       "permission": {
-//         "skill": {
-//           "deploy-helper": "ask",
-//           "dangerous-*":   "deny"
-//         }
-//       }
+//     "permission": {
+//     "skill": {
+//     "deploy-helper": "ask",
+//     "dangerous-*":   "deny"
+//     }
+//     }
 //     }
 //
 // Permission values map onto the shared vocabulary:
@@ -37,8 +37,6 @@ import (
 	"encoding/json"
 	"os"
 	"path"
-	"path/filepath"
-	"strconv"
 
 	"github.com/yeluonight/skillfleet/internal/adapters"
 	"github.com/yeluonight/skillfleet/internal/skillmd"
@@ -51,28 +49,15 @@ const (
 	defaultConfigPath = "~/.config/opencode/opencode.json"
 )
 
-// rootSpec describes one of OpenCode's scan locations.
-type rootSpec struct {
-	idBase string
-	rel    string // path relative to project root or home
-	scope  adapters.Scope
+// rootSpecs enumerate OpenCode's scan locations in deterministic order.
+var rootSpecs = []adapters.RootSpec{
+	{IDBase: "opencode_user_opencode", Scope: adapters.ScopeUser, Tmpl: "~/.config/opencode/skills"},
+	{IDBase: "opencode_user_claude", Scope: adapters.ScopeUser, Tmpl: "~/.claude/skills"},
+	{IDBase: "opencode_user_agents", Scope: adapters.ScopeUser, Tmpl: "~/.agents/skills", Shared: true},
+	{IDBase: "opencode_project_opencode", Scope: adapters.ScopeProject, Tmpl: ".opencode/skills"},
+	{IDBase: "opencode_project_claude", Scope: adapters.ScopeProject, Tmpl: ".claude/skills"},
+	{IDBase: "opencode_project_agents", Scope: adapters.ScopeProject, Tmpl: ".agents/skills", Shared: true},
 }
-
-// projectRootSpecs / userRootSpecs enumerate the six locations. Order
-// is preserved in the returned roots so the WebUI lists them
-// deterministically.
-var (
-	projectRootSpecs = []rootSpec{
-		{"opencode_project_opencode", ".opencode/skills", adapters.ScopeProject},
-		{"opencode_project_claude", ".claude/skills", adapters.ScopeProject},
-		{"opencode_project_agents", ".agents/skills", adapters.ScopeProject},
-	}
-	userRootSpecs = []rootSpec{
-		{"opencode_user_opencode", "~/.config/opencode/skills", adapters.ScopeUser},
-		{"opencode_user_claude", "~/.claude/skills", adapters.ScopeUser},
-		{"opencode_user_agents", "~/.agents/skills", adapters.ScopeUser},
-	}
-)
 
 // Adapter is the read-only OpenCode adapter. ConfigPath overrides the
 // permission config location (tests inject a fixture); empty uses the
@@ -89,37 +74,14 @@ func (a *Adapter) Key() string         { return toolKey }
 func (a *Adapter) DisplayName() string { return displayName }
 
 func (a *Adapter) SkillRoots(sc adapters.ScanContext) ([]adapters.SkillRoot, error) {
-	var roots []adapters.SkillRoot
+	return adapters.SkillRootsFromSpecs(sc, toolKey, rootSpecs)
+}
 
-	// User-scope roots (each spec.rel begins with ~).
-	for _, spec := range userRootSpecs {
-		p, err := adapters.ExpandHome(spec.rel, sc.HomeDir)
-		if err != nil {
-			return nil, err
-		}
-		if adapters.DirExists(p) {
-			roots = append(roots, adapters.SkillRoot{
-				ID: spec.idBase, Tool: toolKey, Scope: spec.scope, Path: p,
-			})
-		}
-	}
-
-	// Project-scope roots, one set per registered project. The id gets
-	// a project index suffix so multiple projects don't collide.
-	for i, proj := range sc.ProjectRoots {
-		for _, spec := range projectRootSpecs {
-			p := filepath.Join(proj, filepath.FromSlash(spec.rel))
-			if adapters.DirExists(p) {
-				roots = append(roots, adapters.SkillRoot{
-					ID:    spec.idBase + "_" + strconv.Itoa(i),
-					Tool:  toolKey,
-					Scope: spec.scope,
-					Path:  p,
-				})
-			}
-		}
-	}
-	return roots, nil
+// CandidateRoots suggests OpenCode's user skill roots for registration.
+// Detected when its config dir exists or an `opencode` binary is on PATH.
+func (a *Adapter) CandidateRoots(sc adapters.ScanContext) []adapters.CandidateRoot {
+	detected := adapters.ConfigDirExists(sc.HomeDir, "~/.config/opencode") || adapters.BinaryOnPath("opencode")
+	return adapters.BuildCandidateRootsFromRootSpecs(sc, toolKey, detected, rootSpecs)
 }
 
 func (a *Adapter) ScanSkills(sc adapters.ScanContext, root adapters.SkillRoot) ([]adapters.DiscoveredSkill, error) {

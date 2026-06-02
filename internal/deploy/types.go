@@ -7,9 +7,10 @@
 //
 //   - The SERVER (this package: jobs.go + planner.go) knows the registry
 //     — which version, its archive sha, its file list — and records
-//     intent + the resolved plan. It NEVER learns or sends an absolute
-//     filesystem path; it addresses targets only by {tool_key, scope,
-//     root_id}.
+//     intent + the resolved plan. For install/state-change work it
+//     addresses targets only by {tool_key, scope, root_id}; register_root
+//     is a narrow exception that carries RootPath so the agent can locally
+//     validate and persist an allowed root.
 //   - The AGENT (internal/agentinstall) resolves that target against its
 //     own allowed_roots, and owns everything that needs to see the local
 //     disk: the diff against the prior install marker, backup, staging,
@@ -31,7 +32,7 @@ package deploy
 import "github.com/yeluonight/skillfleet/internal/adapters"
 
 // Operation enumerates what a deployment job does. Mirrors the migration
-// 0009 CHECK set exactly.
+// 0011 CHECK set exactly.
 type Operation string
 
 const (
@@ -48,11 +49,16 @@ const (
 	// downloads nothing — the plan is just the target state, and the
 	// agent does a safe read-modify-write of one config file.
 	OpStateChange Operation = "state_change"
+	// OpRegisterRoot asks the agent to add a locally validated allowed_root.
+	// This is the only operation whose request may carry RootPath.
+	OpRegisterRoot Operation = "register_root"
+	// OpRemoveRoot asks the agent to remove an allowed_root by Target.RootID.
+	OpRemoveRoot Operation = "remove_root"
 )
 
 func (o Operation) valid() bool {
 	switch o {
-	case OpInstall, OpRollback, OpStateChange:
+	case OpInstall, OpRollback, OpStateChange, OpRegisterRoot, OpRemoveRoot:
 		return true
 	}
 	return false
@@ -97,8 +103,9 @@ type Target struct {
 // Request is the operator's intent, stored as request_json at job
 // creation. For an install it names the skill, the version, and the
 // target; for a rollback it names the prior job to undo; for a state
-// change it names the skill, the target, and the desired state. The
-// fields not relevant to an operation are simply empty.
+// change it names the skill, the target, and the desired state; for root
+// registration/removal it names the root target. The fields not relevant
+// to an operation are simply empty.
 type Request struct {
 	Operation Operation `json:"operation"`
 
@@ -114,6 +121,12 @@ type Request struct {
 	// SkillName + Target above to address the skill. Empty for other
 	// operations.
 	DesiredState adapters.EffectiveState `json:"desired_state,omitempty"`
+
+	// Root-registration field: the absolute path the WebUI asked the agent
+	// to register. This is the sole exception to the usual "server never
+	// sends absolute paths" rule; the agent must still validate it locally
+	// before writing allowed_roots.
+	RootPath string `json:"root_path,omitempty"`
 
 	// RequestedBy is the user id that created the job (provenance/audit).
 	RequestedBy string `json:"requested_by,omitempty"`
@@ -161,6 +174,22 @@ type MarkerSource struct {
 	RefName string `json:"ref_name,omitempty"`
 	Commit  string `json:"commit,omitempty"`
 	Subdir  string `json:"subdir,omitempty"`
+}
+
+// SharedHint carries advisory notes for a target that participates in the
+// cross-tool .agents/skills convention. AlreadyCovered means the same skill
+// content is already visible through the shared agents root on that device.
+type SharedHint struct {
+	Readers         []SharedReader `json:"readers,omitempty"`
+	AlreadyCovered  bool           `json:"already_covered,omitempty"`
+	CoveredByRootID string         `json:"covered_by_root_id,omitempty"`
+}
+
+// PlanHint carries advisory install-planning notes. It never affects agent
+// execution; it exists so the WebUI can explain shared-directory coverage and
+// duplicate-content cases before the operator queues a job.
+type PlanHint struct {
+	Shared *SharedHint `json:"shared,omitempty"`
 }
 
 // Plan is the server-resolved authoritative new-content spec, stored as

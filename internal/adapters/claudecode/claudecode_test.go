@@ -422,3 +422,34 @@ func TestOverrideState_Mapping(t *testing.T) {
 		}
 	}
 }
+
+func TestCandidateRoots(t *testing.T) {
+	home := t.TempDir()
+	// ~/.claude present (tool detected) but skills/ absent (not Exists).
+	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cands := New().CandidateRoots(adapters.ScanContext{HomeDir: home})
+	if len(cands) != 1 {
+		t.Fatalf("got %d candidates, want 1", len(cands))
+	}
+	c := cands[0]
+	if c.ToolKey != "claude-code" || c.Scope != adapters.ScopeUser {
+		t.Errorf("candidate identity = %q/%q", c.ToolKey, c.Scope)
+	}
+	if c.DisplayTmpl != "~/.claude/skills" {
+		t.Errorf("displayTmpl = %q", c.DisplayTmpl)
+	}
+	if c.Path != filepath.Join(home, ".claude", "skills") {
+		t.Errorf("path = %q", c.Path)
+	}
+	if c.Exists {
+		t.Error("skills/ does not exist; Exists should be false")
+	}
+	if !c.ToolDetected {
+		t.Error("~/.claude present; ToolDetected should be true")
+	}
+	if c.Shared {
+		t.Error("Claude Code never reads the shared dir; Shared should be false")
+	}
+}

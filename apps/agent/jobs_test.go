@@ -14,8 +14,6 @@ import (
 	"github.com/yeluonight/skillfleet/internal/agentapi"
 	"github.com/yeluonight/skillfleet/internal/agentcfg"
 	"github.com/yeluonight/skillfleet/internal/agentclient"
-	"github.com/yeluonight/skillfleet/internal/agentinstall"
-	"github.com/yeluonight/skillfleet/internal/agentstate"
 	"github.com/yeluonight/skillfleet/internal/audit"
 	"github.com/yeluonight/skillfleet/internal/db"
 	"github.com/yeluonight/skillfleet/internal/deploy"
@@ -28,9 +26,20 @@ import (
 	"net/http/httptest"
 )
 
-// archivePackages serves a single in-memory archive for any version id,
-// implementing agentapi.PackageSource by writing the bytes to a temp
-// file (ServeContent needs an *os.File).
+// testAgentConfig returns a Load/Save-valid config for tests that only care
+// about allowed_roots but now exercise runOneJob's lazy config reload path.
+func testAgentConfig(roots []agentcfg.AllowedRoot) agentcfg.Config {
+	return agentcfg.Config{
+		ServerURL:       "https://sf.example",
+		DeviceID:        "dev_test",
+		DeviceSecret:    "secret",
+		HeartbeatIntSec: agentcfg.DefaultHeartbeatSec,
+		InventoryIntSec: agentcfg.DefaultInventorySec,
+		JobsIntSec:      agentcfg.DefaultJobsSec,
+		AllowedRoots:    roots,
+	}
+}
+
 type archivePackages struct{ path string }
 
 func (a archivePackages) ArchiveForVersion(string) (*os.File, int64, error) {
@@ -123,7 +132,7 @@ func TestRunOneJob_EndToEndInstall(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	// --- real client + executor pointed at an allowed root ---
+	// --- real client + agent config pointed at an allowed root ---
 	client, err := agentclient.New(agentclient.Config{
 		ServerURL: srv.URL, DeviceID: res.Device.ID, DeviceSecret: res.Secret,
 		Now: func() time.Time { return now },
@@ -132,13 +141,11 @@ func TestRunOneJob_EndToEndInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	allowedRoot := t.TempDir()
-	cfg := agentcfg.Config{
-		AllowedRoots: []agentcfg.AllowedRoot{{ID: "r1", Tool: "claude-code", Scope: "user", Path: allowedRoot}},
+	cfgPath := filepath.Join(t.TempDir(), "agent.json")
+	cfg := testAgentConfig([]agentcfg.AllowedRoot{{ID: "r1", Tool: "claude-code", Scope: "user", Path: allowedRoot}})
+	if err := agentcfg.Save(cfgPath, cfg); err != nil {
+		t.Fatal(err)
 	}
-	exec := agentinstall.NewExecutor(agentinstall.Config{
-		BackupsDir:   filepath.Join(t.TempDir(), "backups"),
-		AllowedRoots: agentRoots(cfg),
-	}, fetcherAdapter{client}, func() time.Time { return now })
 
 	// --- claim the job (as the loop would) and run it ---
 	claimed, ok, err := client.Jobs(ctx)
@@ -146,8 +153,7 @@ func TestRunOneJob_EndToEndInstall(t *testing.T) {
 		t.Fatalf("claim: ok=%v err=%v", ok, err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	stateWriter := agentstate.NewWriter(agentRoots(cfg), t.TempDir())
-	runOneJob(ctx, log, client, exec, stateWriter, claimed)
+	runOneJob(ctx, log, client, cfgPath, t.TempDir(), claimed)
 
 	// --- the skill must be installed on disk ---
 	installed := filepath.Join(allowedRoot, "deploy-helper", "SKILL.md")
@@ -166,6 +172,60 @@ func TestRunOneJob_EndToEndInstall(t *testing.T) {
 	final, _ := store.Get(ctx, job.ID)
 	if final.Status != deploy.StatusSucceeded {
 		t.Errorf("job status = %q, want succeeded; result=%s", final.Status, final.ResultJSON)
+	}
+}
+
+func TestRunRootJobsRegisterRemove(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "agent.json")
+	cfg := agentcfg.Config{
+		ServerURL: "https://sf.example", DeviceID: "dev_x", DeviceSecret: "sec",
+		HeartbeatIntSec: 30, InventoryIntSec: 300, JobsIntSec: 15,
+	}
+	if err := agentcfg.Save(cfgPath, cfg); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	rootDir := filepath.Join(home, "custom", "skills")
+	if err := os.MkdirAll(rootDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := runRegisterRootJob(cfgPath, home, deploy.Request{
+		Operation: deploy.OpRegisterRoot,
+		Target:    deploy.Target{ToolKey: "claude-code", Scope: "user"},
+		RootPath:  rootDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ResolvedRootPath != rootDir {
+		t.Fatalf("register result = %+v", res)
+	}
+	cfg, err = agentcfg.Load(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.AllowedRoots) != 1 || cfg.AllowedRoots[0].Path != rootDir {
+		t.Fatalf("roots after register = %+v", cfg.AllowedRoots)
+	}
+
+	res, err = runRemoveRootJob(cfgPath, deploy.Request{
+		Operation: deploy.OpRemoveRoot,
+		Target:    deploy.Target{RootID: cfg.AllowedRoots[0].ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ResolvedRootPath != rootDir {
+		t.Fatalf("remove result = %+v", res)
+	}
+	cfg, err = agentcfg.Load(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.AllowedRoots) != 0 {
+		t.Fatalf("roots after remove = %+v", cfg.AllowedRoots)
 	}
 }
 
@@ -245,14 +305,11 @@ func TestRunOneJob_EndToEndStateChange(t *testing.T) {
 
 	// The writer's home dir is irrelevant for claude-code (its config path
 	// derives from the resolved root's parent); set it to a temp dir.
-	cfg := agentcfg.Config{
-		AllowedRoots: []agentcfg.AllowedRoot{{ID: "r1", Tool: "claude-code", Scope: "user", Path: allowedRoot}},
+	cfgPath := filepath.Join(t.TempDir(), "agent.json")
+	cfg := testAgentConfig([]agentcfg.AllowedRoot{{ID: "r1", Tool: "claude-code", Scope: "user", Path: allowedRoot}})
+	if err := agentcfg.Save(cfgPath, cfg); err != nil {
+		t.Fatal(err)
 	}
-	exec := agentinstall.NewExecutor(agentinstall.Config{
-		BackupsDir:   filepath.Join(t.TempDir(), "backups"),
-		AllowedRoots: agentRoots(cfg),
-	}, fetcherAdapter{client}, func() time.Time { return now })
-	stateWriter := agentstate.NewWriter(agentRoots(cfg), t.TempDir())
 
 	// --- claim + run the job ---
 	claimed, ok, err := client.Jobs(ctx)
@@ -260,7 +317,7 @@ func TestRunOneJob_EndToEndStateChange(t *testing.T) {
 		t.Fatalf("claim: ok=%v err=%v", ok, err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	runOneJob(ctx, log, client, exec, stateWriter, claimed)
+	runOneJob(ctx, log, client, cfgPath, t.TempDir(), claimed)
 
 	// --- settings.json (sibling of the skills root) carries the override ---
 	settingsPath := filepath.Join(filepath.Dir(allowedRoot), "settings.json")

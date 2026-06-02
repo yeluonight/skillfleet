@@ -1,4 +1,4 @@
-import type { DeploymentStatus, EffectiveState, LocalState } from "@/lib/api"
+import type { DeploymentJob, DeploymentStatus, EffectiveState, LocalState } from "@/lib/api"
 
 // Centralised enum → {label, colour} presentation, mirroring the meta-table
 // pattern of lib/diff-status.tsx. Each badge below grew an inline
@@ -30,12 +30,17 @@ export function DeploymentStatusBadge({ status }: { status: DeploymentStatus }) 
 
 // --- Deployment operation (JobsList) ---
 
-const OPERATION_META: Record<"install" | "rollback", { label: string; cls: string }> = {
+type DeploymentOperation = DeploymentJob["operation"]
+
+const OPERATION_META: Record<DeploymentOperation, { label: string; cls: string }> = {
   install: { label: "安装", cls: "bg-sky-500/15 text-sky-600" },
   rollback: { label: "回滚", cls: "bg-amber-500/15 text-amber-600" },
+  state_change: { label: "状态", cls: "bg-muted text-muted-foreground" },
+  register_root: { label: "注册根", cls: "bg-muted text-muted-foreground" },
+  remove_root: { label: "移除根", cls: "bg-muted text-muted-foreground" },
 }
 
-export function OperationBadge({ operation }: { operation: "install" | "rollback" }) {
+export function OperationBadge({ operation }: { operation: DeploymentOperation }) {
   const { label, cls } = OPERATION_META[operation]
   return <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${cls}`}>{label}</span>
 }

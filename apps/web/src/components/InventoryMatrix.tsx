@@ -1,56 +1,29 @@
 import { useEffect, useState } from "react"
-import { AlertCircle } from "lucide-react"
-
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 import { ChangeStateDialog } from "@/components/ChangeStateDialog"
-import { api, apiErrorMessage, supportedStatesForTool } from "@/lib/api"
+import { api, supportedStatesForTool } from "@/lib/api"
 import type { DeviceDrift, InventoryRun, InventorySkill, LocalState } from "@/lib/api"
 import { LocalStateBadge, StateBadge } from "@/lib/status-meta"
 
-// InventoryMatrix lazily loads a device's latest scan and renders the
-// tool x scope x skill grid. It's mounted only when a device row is
-// expanded, so the (potentially large) inventory fetch is deferred
-// until the operator actually wants it.
+// InventoryMatrix renders a device's latest inventory as a tool x scope x
+// skill grid. The parent owns the inventory fetch and passes `run` down so
+// the roots card and matrix share one request.
 //
-// Alongside the scan it loads the device's drift classification (phase 7)
-// and overlays a per-skill local_state badge — clean / local_modified /
-// untracked — keyed by (tool, scope, name). Drift is best-effort: if that
-// fetch fails the matrix still renders, just without the badges.
-//
-// Note: this component keeps hand-rolled effects rather than useApiResource
-// — `run` is tri-state (undefined=loading / null=no scan / value) which the
-// hook's data|null shape can't express, and drift is a silent best-effort
-// fetch (a failure must leave badges absent, not surface an error).
-export function InventoryMatrix({ deviceId }: { deviceId: string }) {
-  const [run, setRun] = useState<InventoryRun | null | undefined>(undefined)
-  const [error, setError] = useState<string | null>(null)
+// Drift is a separate, best-effort fetch: if it fails the matrix still
+// renders, just without the local_state badges.
+export function InventoryMatrix({
+  deviceId,
+  run,
+  onRefresh,
+}: {
+  deviceId: string
+  run: InventoryRun | null | undefined
+  onRefresh: () => void
+}) {
   const [drift, setDrift] = useState<DeviceDrift | null>(null)
   // The skill whose State cell was clicked (drives ChangeStateDialog).
   // null = dialog closed.
   const [stateTarget, setStateTarget] = useState<InventorySkill | null>(null)
-
-  // reloadKey bumps to force an inventory refetch after a state change is
-  // dispatched (so a follow-up scan's result is picked up on next poll;
-  // the immediate bump just re-runs the fetch once).
-  const [reloadKey, setReloadKey] = useState(0)
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await api.deviceInventory(deviceId)
-        if (!cancelled) setRun(res.run)
-      } catch (err) {
-        if (!cancelled) {
-          setError(apiErrorMessage(err, "Failed to load inventory."))
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [deviceId, reloadKey])
 
   // Drift is a separate, best-effort fetch: it must not block or fail the
   // matrix. A drift error simply leaves the badges absent.
@@ -69,15 +42,6 @@ export function InventoryMatrix({ deviceId }: { deviceId: string }) {
     }
   }, [deviceId])
 
-  if (error) {
-    return (
-      <Alert variant="destructive" className="mt-3">
-        <AlertCircle className="size-4" aria-hidden />
-        <AlertTitle>Inventory error</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
-    )
-  }
   if (run === undefined) {
     return <p className="text-muted-foreground mt-3 text-sm">Loading skills…</p>
   }
@@ -192,7 +156,7 @@ export function InventoryMatrix({ deviceId }: { deviceId: string }) {
           scope={stateTarget.scope}
           skillName={stateTarget.name}
           currentState={stateTarget.effective_state}
-          onApplied={() => setReloadKey((k) => k + 1)}
+          onApplied={onRefresh}
         />
       ) : null}
     </div>
@@ -213,4 +177,3 @@ function groupSkills(skills: InventorySkill[]): toolGroup[] {
   }
   return groups
 }
-

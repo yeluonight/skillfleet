@@ -25,7 +25,6 @@ package codex
 import (
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/BurntSushi/toml"
 
@@ -69,37 +68,26 @@ type tomlConfig struct {
 	} `toml:"skills"`
 }
 
+// rootSpecs enumerates Codex's scan locations in deterministic order. The
+// user root is the SHARED ~/.agents/skills (Codex is the canonical reader of
+// the cross-tool shared directory), so it is flagged Shared for candidate UI.
+var rootSpecs = []adapters.RootSpec{
+	{IDBase: "codex_user", Scope: adapters.ScopeUser, Tmpl: "~/.agents/skills", Shared: true},
+	{IDBase: "codex_project", Scope: adapters.ScopeProject, Tmpl: ".agents/skills", Shared: true},
+	{IDBase: "codex_system", Scope: adapters.ScopeSystem, Tmpl: systemSkillsPath},
+}
+
 func (a *Adapter) SkillRoots(sc adapters.ScanContext) ([]adapters.SkillRoot, error) {
-	var roots []adapters.SkillRoot
+	return adapters.SkillRootsFromSpecs(sc, toolKey, rootSpecs)
+}
 
-	userPath, err := adapters.ExpandHome("~/.agents/skills", sc.HomeDir)
-	if err != nil {
-		return nil, err
-	}
-	if adapters.DirExists(userPath) {
-		roots = append(roots, adapters.SkillRoot{
-			ID: "codex_user", Tool: toolKey, Scope: adapters.ScopeUser, Path: userPath,
-		})
-	}
-
-	for i, proj := range sc.ProjectRoots {
-		projPath := filepath.Join(proj, ".agents", "skills")
-		if adapters.DirExists(projPath) {
-			roots = append(roots, adapters.SkillRoot{
-				ID:    "codex_project_" + strconv.Itoa(i),
-				Tool:  toolKey,
-				Scope: adapters.ScopeProject,
-				Path:  projPath,
-			})
-		}
-	}
-
-	if adapters.DirExists(systemSkillsPath) {
-		roots = append(roots, adapters.SkillRoot{
-			ID: "codex_system", Tool: toolKey, Scope: adapters.ScopeSystem, Path: systemSkillsPath,
-		})
-	}
-	return roots, nil
+// CandidateRoots suggests Codex's skill roots for registration. Detected
+// when ~/.codex exists or a `codex` binary is on PATH (config dir is the
+// more reliable signal; PATH is a fallback that may miss in a service
+// context).
+func (a *Adapter) CandidateRoots(sc adapters.ScanContext) []adapters.CandidateRoot {
+	detected := adapters.ConfigDirExists(sc.HomeDir, "~/.codex") || adapters.BinaryOnPath("codex")
+	return adapters.BuildCandidateRootsFromRootSpecs(sc, toolKey, detected, rootSpecs)
 }
 
 // ScanSkills loads the config-driven enable map once, then walks the

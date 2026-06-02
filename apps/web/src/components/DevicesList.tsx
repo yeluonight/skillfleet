@@ -1,14 +1,15 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { AlertCircle, ChevronDown, ChevronRight, Cpu, RefreshCw } from "lucide-react"
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { DeviceRootsCard } from "@/components/DeviceRootsCard"
 import { InventoryMatrix } from "@/components/InventoryMatrix"
 
-import { api, apiErrorMessage } from "@/lib/api"
-import type { Device } from "@/lib/api"
 import { useApiResource } from "@/hooks/useApiResource"
+import { api, apiErrorMessage } from "@/lib/api"
+import type { Device, InventoryRun } from "@/lib/api"
 
 // DevicesList renders the table of enrolled devices with approve /
 // revoke actions. The server enforces the state machine; the UI just
@@ -169,11 +170,62 @@ function DeviceTable({
                 />
               </div>
             </div>
-            {expanded ? <InventoryMatrix deviceId={d.id} /> : null}
+            {expanded ? <DeviceInventoryPanel deviceId={d.id} /> : null}
           </li>
         )
       })}
     </ul>
+  )
+}
+
+function DeviceInventoryPanel({ deviceId }: { deviceId: string }) {
+  const [run, setRun] = useState<InventoryRun | null | undefined>(undefined)
+  const [error, setError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await api.deviceInventory(deviceId)
+        if (!cancelled) {
+          setError(null)
+          setRun(res.run)
+        }
+      } catch (err) {
+        if (!cancelled) setError(apiErrorMessage(err, "Failed to load inventory."))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [deviceId, reloadKey])
+
+  if (error) {
+    return (
+      <Alert variant="destructive" className="mt-3">
+        <AlertCircle className="size-4" aria-hidden />
+        <AlertTitle>Inventory error</AlertTitle>
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    )
+  }
+
+  return (
+    <div className="mt-3 space-y-4">
+      <DeviceRootsCard
+        deviceId={deviceId}
+        roots={run?.roots ?? []}
+        hasInventory={run !== null && run !== undefined}
+        loading={run === undefined}
+        onRefresh={() => setReloadKey((k) => k + 1)}
+      />
+      <InventoryMatrix
+        deviceId={deviceId}
+        run={run}
+        onRefresh={() => setReloadKey((k) => k + 1)}
+      />
+    </div>
   )
 }
 

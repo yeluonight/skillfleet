@@ -70,16 +70,16 @@ func TestScan_EmptyHomeYieldsEmptyReport(t *testing.T) {
 	}
 }
 
-func TestAll_SixAdapters(t *testing.T) {
+func TestAll_Adapters(t *testing.T) {
 	all := All()
-	if len(all) != 6 {
-		t.Fatalf("All() = %d adapters, want 6", len(all))
+	if len(all) != 7 {
+		t.Fatalf("All() = %d adapters, want 7", len(all))
 	}
 	keys := map[string]bool{}
 	for _, a := range all {
 		keys[a.Key()] = true
 	}
-	for _, want := range []string{"claude-code", "codex", "opencode", "antigravity", "antigravity-cli", "pi"} {
+	for _, want := range []string{"claude-code", "agents", "codex", "opencode", "antigravity", "antigravity-cli", "pi"} {
 		if !keys[want] {
 			t.Errorf("adapter %q missing from All()", want)
 		}

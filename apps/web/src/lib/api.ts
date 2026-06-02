@@ -69,6 +69,18 @@ export type InventorySkill = {
   warnings?: InventoryWarning[]
 }
 
+export type RootCandidate = {
+  tool_key: string
+  scope: "user" | "system"
+  path: string
+  display_tmpl?: string
+  exists: boolean
+  registered: boolean
+  root_id?: string
+  tool_detected?: boolean
+  shared?: boolean
+}
+
 // InventoryRun is the latest scan a device uploaded.
 export type InventoryRun = {
   run_id: string
@@ -76,6 +88,7 @@ export type InventoryRun = {
   skill_count: number
   root_count: number
   agent_version?: string
+  roots?: RootCandidate[]
   skills: InventorySkill[]
 }
 
@@ -374,6 +387,25 @@ export type DeployPlan = {
   files: DeployFileSpec[]
 }
 
+export type SharedReader = {
+  tool_key: string
+  name: string
+  has_adapter: boolean
+}
+
+export type DeployPlanHint = {
+  shared?: {
+    readers?: SharedReader[]
+    already_covered?: boolean
+    covered_by_root_id?: string
+  }
+}
+
+export type DeployPlanResponse = {
+  plan: DeployPlan
+  hint?: DeployPlanHint
+}
+
 // DeployRequestBody is the JSON for plan / execute.
 export type DeployRequestBody = {
   skill_name: string
@@ -395,6 +427,13 @@ export type StateChangeBody = {
   root_id?: string
   device_id: string
   desired_state: EffectiveState
+}
+
+export type RegisterDeviceRootBody = {
+  tool_key: string
+  scope: "user" | "system"
+  path: string
+  custom?: boolean
 }
 
 // STATE_CHANGE_SUPPORT mirrors the server's statematrix (internal/deploy):
@@ -428,7 +467,7 @@ export type DeploymentStatus =
 export type DeploymentJob = {
   id: string
   device_id: string
-  operation: "install" | "rollback"
+  operation: "install" | "rollback" | "state_change" | "register_root" | "remove_root"
   status: DeploymentStatus
   skill_name?: string
   version_id?: string
@@ -640,13 +679,20 @@ export const api = {
       "GET",
       `/api/devices/${encodeURIComponent(id)}/inventory`,
     ),
+  registerDeviceRoot: (id: string, body: RegisterDeviceRootBody) =>
+    request<DeploymentJob>("POST", `/api/devices/${encodeURIComponent(id)}/roots`, body),
+  removeDeviceRoot: (id: string, rootId: string) =>
+    request<DeploymentJob>(
+      "POST",
+      `/api/devices/${encodeURIComponent(id)}/roots/${encodeURIComponent(rootId)}/remove`,
+    ),
 
   deviceDrift: (id: string) =>
     request<DeviceDrift>("GET", `/api/devices/${encodeURIComponent(id)}/drift`),
 
   // --- Deployments (phase 8) ---
   planDeployment: (body: DeployRequestBody) =>
-    request<{ plan: DeployPlan }>("POST", "/api/deployments/plan", body),
+    request<DeployPlanResponse>("POST", "/api/deployments/plan", body),
   executeDeployment: (body: DeployRequestBody) =>
     request<DeploymentJob>("POST", "/api/deployments/execute", body),
   rollbackDeployment: (jobId: string) =>

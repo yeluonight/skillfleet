@@ -18,7 +18,7 @@ import (
 // authentic rows.
 func storeSampleInventory(t *testing.T, d *sql.DB, deviceID string) {
 	t.Helper()
-	rep := inventory.Report{
+	storeReport(t, d, deviceID, inventory.Report{
 		AgentVersion: "0.3.0",
 		Tools: []inventory.ToolInstance{
 			{
@@ -42,7 +42,15 @@ func storeSampleInventory(t *testing.T, d *sql.DB, deviceID string) {
 				},
 			},
 		},
-	}
+		Roots: []inventory.RootCandidate{
+			{ToolKey: "claude-code", Scope: "user", Path: "/h/.claude/skills", Exists: true, Registered: true, RootID: "claude_user", ToolDetected: true},
+			{ToolKey: "codex", Scope: "user", Path: "/h/.agents/skills", Exists: false, Shared: true},
+		},
+	})
+}
+
+func storeReport(t *testing.T, d *sql.DB, deviceID string, rep inventory.Report) {
+	t.Helper()
 	if _, err := inventory.Store(context.Background(), d, deviceID, rep, time.Unix(1_700_000_000, 0)); err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +77,14 @@ func TestDeviceInventory_ReturnsMatrix(t *testing.T) {
 			RunID      string `json:"run_id"`
 			SkillCount int    `json:"skill_count"`
 			RootCount  int    `json:"root_count"`
-			Skills     []struct {
+			Roots      []struct {
+				ToolKey    string `json:"tool_key"`
+				Path       string `json:"path"`
+				Registered bool   `json:"registered"`
+				RootID     string `json:"root_id"`
+				Shared     bool   `json:"shared"`
+			} `json:"roots"`
+			Skills []struct {
 				ToolKey        string `json:"tool_key"`
 				Scope          string `json:"scope"`
 				Name           string `json:"name"`
@@ -89,6 +104,9 @@ func TestDeviceInventory_ReturnsMatrix(t *testing.T) {
 	}
 	if got.Run.SkillCount != 3 || got.Run.RootCount != 2 {
 		t.Errorf("counts = %d / %d, want 3 / 2", got.Run.SkillCount, got.Run.RootCount)
+	}
+	if len(got.Run.Roots) != 2 || got.Run.Roots[0].RootID != "claude_user" || !got.Run.Roots[1].Shared {
+		t.Errorf("roots = %+v", got.Run.Roots)
 	}
 	if len(got.Run.Skills) != 3 {
 		t.Fatalf("skills = %d, want 3", len(got.Run.Skills))

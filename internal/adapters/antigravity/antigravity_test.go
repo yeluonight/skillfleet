@@ -97,7 +97,7 @@ func TestSkillRoots_UserScope(t *testing.T) {
 	}
 }
 
-func TestSkillRoots_ProjectScope(t *testing.T) {
+func TestSkillRoots_ProjectAgentsIgnored(t *testing.T) {
 	home := t.TempDir()
 	proj := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(proj, ".agents", "skills"), 0o755); err != nil {
@@ -110,8 +110,8 @@ func TestSkillRoots_ProjectScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(roots) != 1 || roots[0].Scope != adapters.ScopeProject || roots[0].ID != "antigravity_project_0" {
-		t.Errorf("roots = %+v", roots)
+	if len(roots) != 0 {
+		t.Errorf("roots = %+v, want no .agents duplicate", roots)
 	}
 }
 

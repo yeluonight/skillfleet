@@ -129,6 +129,14 @@ type ScanContext struct {
 // ReadOnlyAdapter is the Phase 3 contract. The write-side methods
 // (PlanInstall / PlanStateChange) from v1.0 §10 are intentionally
 // excluded here and will be added as a separate interface in Phase 4.
+//
+// CandidateRoots (added Phase 11) is the one method that is discovery
+// WITHOUT a scan: it lists where the tool could keep skills regardless
+// of whether those directories exist, so the agent can suggest roots to
+// register. It is in the interface (not an optional capability detected
+// by type assertion) on purpose — every adapter must declare its
+// candidates, and a missing implementation should be a compile error,
+// not a silent gap in the suggestions an operator sees.
 type ReadOnlyAdapter interface {
 	// Key returns the stable tool identifier (e.g. "claude-code").
 	Key() string
@@ -146,4 +154,12 @@ type ReadOnlyAdapter interface {
 	// rather than aborting the whole scan, so one malformed skill does
 	// not blind the operator to its neighbours.
 	ScanSkills(sc ScanContext, root SkillRoot) ([]DiscoveredSkill, error)
+
+	// CandidateRoots lists the user/system locations this tool could use
+	// for skills — listed whether or not they exist — so the agent can
+	// suggest them for registration (Phase 11). Each candidate carries
+	// Exists + a soft ToolDetected hint; project-scope candidates are
+	// omitted because project scanning is not wired this phase. Most
+	// adapters build this from a spec list via BuildCandidateRoots.
+	CandidateRoots(sc ScanContext) []CandidateRoot
 }

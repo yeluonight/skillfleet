@@ -18,8 +18,6 @@ import (
 	"github.com/yeluonight/skillfleet/internal/agentapi"
 	"github.com/yeluonight/skillfleet/internal/agentcfg"
 	"github.com/yeluonight/skillfleet/internal/agentclient"
-	"github.com/yeluonight/skillfleet/internal/agentinstall"
-	"github.com/yeluonight/skillfleet/internal/agentstate"
 	"github.com/yeluonight/skillfleet/internal/audit"
 	"github.com/yeluonight/skillfleet/internal/db"
 	"github.com/yeluonight/skillfleet/internal/deploy"
@@ -90,19 +88,17 @@ func runStateChangeE2E(t *testing.T, roots []agentcfg.AllowedRoot, homeDir strin
 		t.Fatal(err)
 	}
 
-	cfg := agentcfg.Config{AllowedRoots: roots}
-	exec := agentinstall.NewExecutor(agentinstall.Config{
-		BackupsDir:   filepath.Join(t.TempDir(), "backups"),
-		AllowedRoots: agentRoots(cfg),
-	}, fetcherAdapter{client}, func() time.Time { return now })
-	stateWriter := agentstate.NewWriter(agentRoots(cfg), homeDir)
+	cfgPath := filepath.Join(t.TempDir(), "agent.json")
+	if err := agentcfg.Save(cfgPath, testAgentConfig(roots)); err != nil {
+		t.Fatal(err)
+	}
 
 	claimed, ok, err := client.Jobs(ctx)
 	if err != nil || !ok {
 		t.Fatalf("claim: ok=%v err=%v", ok, err)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	runOneJob(ctx, log, client, exec, stateWriter, claimed)
+	runOneJob(ctx, log, client, cfgPath, homeDir, claimed)
 
 	final, _ := store.Get(ctx, job.ID)
 	return final.Status
@@ -187,7 +183,7 @@ func TestStateChangeE2E_Codex(t *testing.T) {
 			Target: deploy.Target{ToolKey: "codex", Scope: "user", RootID: "r1"},
 		},
 		deploy.StateChangePlan{
-			Target: deploy.Target{ToolKey: "codex", Scope: "user", RootID: "r1"},
+			Target:    deploy.Target{ToolKey: "codex", Scope: "user", RootID: "r1"},
 			SkillName: "deploy", DesiredState: "off",
 		})
 	if status != deploy.StatusSucceeded {
@@ -219,7 +215,7 @@ func TestStateChangeE2E_Opencode(t *testing.T) {
 			Target: deploy.Target{ToolKey: "opencode", Scope: "user", RootID: "r1"},
 		},
 		deploy.StateChangePlan{
-			Target: deploy.Target{ToolKey: "opencode", Scope: "user", RootID: "r1"},
+			Target:    deploy.Target{ToolKey: "opencode", Scope: "user", RootID: "r1"},
 			SkillName: "deploy", DesiredState: "ask",
 		})
 	if status != deploy.StatusSucceeded {
