@@ -7,6 +7,7 @@
 .DESCRIPTION
   Usage:
     irm https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install.ps1 | iex
+    $env:SKILLFLEET_COMPONENT = "server"; irm https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install.ps1 | iex
 
   Environment overrides:
     SKILLFLEET_COMPONENT  agent (default) | server
@@ -92,8 +93,13 @@ if ($Component -eq "agent") {
 Next steps:
   1. skillfleet-agent enroll <server-url> <token>     # token from the WebUI
   2. Approve the device in the WebUI (Devices page).
-  3. skillfleet-agent roots add -tool claude-code -scope user -path `$HOME\.claude\skills
-  4. skillfleet-agent                                  # run the agent loop
+  3. skillfleet-agent                                  # heartbeat + candidate roots + inventory + jobs
+  4. In the WebUI Devices / Roots area, register a candidate root for this device.
+
+CLI fallback when no candidate is shown:
+  skillfleet-agent roots scan
+  skillfleet-agent roots add -tool claude-code -scope user -path `$HOME\.claude\skills
+  skillfleet-agent roots list
 "@
 } else {
     Write-Host @"

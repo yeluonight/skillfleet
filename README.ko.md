@@ -62,8 +62,8 @@ windows × amd64 / arm64) [GitHub Releases](https://github.com/yeluonight/skillf
 
 ```bash
 # Linux / macOS: server를 한 줄로 설치
-SKILLFLEET_COMPONENT=server curl -fsSL \
-  https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install.sh | sh
+curl -fsSL \
+  https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install.sh | SKILLFLEET_COMPONENT=server sh
 
 skillfleet-server          # :7890 에서 수신, 최초 실행 시 stderr에 setup code 출력
 ```

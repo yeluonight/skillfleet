@@ -63,8 +63,8 @@ windows × amd64 / arm64）、[GitHub Releases](https://github.com/yeluonight/sk
 
 ```bash
 # Linux / macOS：server をワンラインでインストール
-SKILLFLEET_COMPONENT=server curl -fsSL \
-  https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install.sh | sh
+curl -fsSL \
+  https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install.sh | SKILLFLEET_COMPONENT=server sh
 
 skillfleet-server          # :7890 で待受、初回起動時に stderr へ setup code を出力
 ```

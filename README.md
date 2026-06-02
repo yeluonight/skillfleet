@@ -61,8 +61,8 @@ amd64 / arm64），发布到 [GitHub Releases](https://github.com/yeluonight/ski
 
 ```bash
 # Linux / macOS：一行安装 server
-SKILLFLEET_COMPONENT=server curl -fsSL \
-  https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install.sh | sh
+curl -fsSL \
+  https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install.sh | SKILLFLEET_COMPONENT=server sh
 
 skillfleet-server          # 监听 :7890，首次启动在 stderr 打印 setup code
 ```

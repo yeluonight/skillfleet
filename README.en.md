@@ -63,8 +63,8 @@ windows × amd64 / arm64) and published to
 
 ```bash
 # Linux / macOS: install the server in one line
-SKILLFLEET_COMPONENT=server curl -fsSL \
-  https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install.sh | sh
+curl -fsSL \
+  https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install.sh | SKILLFLEET_COMPONENT=server sh
 
 skillfleet-server          # listens on :7890, prints a setup code to stderr on first run
 ```
