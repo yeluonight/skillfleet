@@ -22,21 +22,26 @@ import (
 // (no raw SQL inserts).
 func enrollDeviceViaDB(t *testing.T, d *sql.DB, name, startStatus string) string {
 	t.Helper()
+	return enrollDeviceViaDBAt(t, d, name, startStatus, time.Now())
+}
+
+func enrollDeviceViaDBAt(t *testing.T, d *sql.DB, name, startStatus string, now time.Time) string {
+	t.Helper()
 	ctx := context.Background()
 	tx, err := d.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tok, err := enrollment.Create(ctx, d, time.Hour, time.Now())
+	tok, err := enrollment.Create(ctx, d, time.Hour, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := enrollment.Consume(ctx, tx, tok.Plaintext, time.Now()); err != nil {
+	if _, err := enrollment.Consume(ctx, tx, tok.Plaintext, now); err != nil {
 		t.Fatal(err)
 	}
 	res, err := devices.Enroll(ctx, tx, devices.EnrollInput{
 		Name: name, Hostname: "h", OS: "linux", Arch: "amd64", AgentVersion: "0.1.0",
-	}, time.Now())
+	}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,8 +62,9 @@ func TestListDevices_ReturnsAll(t *testing.T) {
 		ratelimit.Rate{Limit: 100, Window: time.Minute},
 	)
 	sc, cc := setupAndLogin(t, srv, d, "alice", "correcthorsebatterystaple")
-	id1 := enrollDeviceViaDB(t, d, "laptop-a", devices.StatusPending)
-	id2 := enrollDeviceViaDB(t, d, "laptop-b", devices.StatusApproved)
+	created := time.Now()
+	id1 := enrollDeviceViaDBAt(t, d, "laptop-a", devices.StatusPending, created)
+	id2 := enrollDeviceViaDBAt(t, d, "laptop-b", devices.StatusApproved, created.Add(time.Millisecond))
 
 	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/devices", nil)
 	resp := authedDo(t, sc, cc, req)
