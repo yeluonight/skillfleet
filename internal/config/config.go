@@ -85,7 +85,7 @@ type LoggingSection struct {
 func Defaults() Config {
 	return Config{
 		Server: ServerSection{
-			Bind:        "0.0.0.0:7890",
+			Bind:        "0.0.0.0:47890",
 			ExternalURL: "",
 			DataDir:     "~/.skillfleet/server",
 		},
@@ -127,7 +127,7 @@ const defaultYAML = `# SkillFleet server configuration
 # Generated on first launch. Edit and restart the server to apply changes.
 # Reference: IMPLEMENTATION_PLAN.md §8.1.
 server:
-  bind: "0.0.0.0:7890"
+  bind: "0.0.0.0:47890"
   external_url: ""              # reverse-proxy scenarios fill this; empty = derive from Host header
   data_dir: "~/.skillfleet/server"
 

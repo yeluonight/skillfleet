@@ -65,10 +65,10 @@ windows × amd64 / arm64) [GitHub Releases](https://github.com/yeluonight/skillf
 curl -fsSL \
   https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install.sh | SKILLFLEET_COMPONENT=server sh
 
-skillfleet-server          # :7890 에서 수신, 최초 실행 시 stderr에 setup code 출력
+skillfleet-server          # :47890 에서 수신, 최초 실행 시 stderr에 setup code 출력
 ```
 
-`http://<host>:7890`을 열고 stderr의 setup code로 관리자 초기화를 완료합니다. Server는 별도
+`http://<host>:47890`을 열고 stderr의 setup code로 관리자 초기화를 완료합니다. Server는 별도
 설정 없이 바로 동작합니다(기본 데이터 디렉터리 `~/.skillfleet/server`, config.yaml 불필요).
 
 ### 2. 각 기기에 Agent 설치
@@ -91,7 +91,7 @@ irm https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install
 
 ```bash
 # 1) WebUI에서 enrollment token을 발급한 뒤:
-skillfleet-agent enroll http://<server>:7890 <token>
+skillfleet-agent enroll http://<server>:47890 <token>
 
 # 2) WebUI의 Devices 페이지에서 해당 기기를 승인
 

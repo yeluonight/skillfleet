@@ -15,14 +15,14 @@ export default defineConfig({
     port: 5173,
     proxy: {
       // /api and /health hit the Go server during dev. The server's
-      // default bind is 127.0.0.1:7890 (config.yaml override). Cookies
-      // ride through unchanged because both hosts are 127.0.0.1.
+      // default port is 47890 (config.yaml override). Cookies ride
+      // through unchanged because both hosts are 127.0.0.1.
       "/api": {
-        target: "http://127.0.0.1:7890",
+        target: "http://127.0.0.1:47890",
         changeOrigin: false,
       },
       "/health": {
-        target: "http://127.0.0.1:7890",
+        target: "http://127.0.0.1:47890",
         changeOrigin: false,
       },
     },

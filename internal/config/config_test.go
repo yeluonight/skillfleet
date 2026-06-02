@@ -10,8 +10,8 @@ import (
 
 func TestDefaultsMatchSpec(t *testing.T) {
 	d := Defaults()
-	if d.Server.Bind != "0.0.0.0:7890" {
-		t.Errorf("server.bind = %q, want 0.0.0.0:7890", d.Server.Bind)
+	if d.Server.Bind != "0.0.0.0:47890" {
+		t.Errorf("server.bind = %q, want 0.0.0.0:47890", d.Server.Bind)
 	}
 	if d.Server.DataDir != "~/.skillfleet/server" {
 		t.Errorf("server.data_dir = %q, want ~/.skillfleet/server", d.Server.DataDir)
@@ -132,7 +132,7 @@ func TestLoadRejectsUnknownFields(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	body := `server:
-  bind: "127.0.0.1:7890"
+  bind: "127.0.0.1:47890"
   data_dir: "` + dir + `"
   typo_field: 1
 `
@@ -152,7 +152,7 @@ func TestLoadRejectsInvalidLogging(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	body := `server:
-  bind: "127.0.0.1:7890"
+  bind: "127.0.0.1:47890"
   data_dir: "` + dir + `"
 logging:
   level: "verbose"
@@ -176,7 +176,7 @@ func TestLoadAcceptsDisabledScheduler(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	body := `server:
-  bind: "127.0.0.1:7890"
+  bind: "127.0.0.1:47890"
   data_dir: "` + dir + `"
 scheduler:
   update_check_interval: "0"
@@ -200,7 +200,7 @@ func TestLoadRejectsEnabledSchedulerZeroConcurrency(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	body := `server:
-  bind: "127.0.0.1:7890"
+  bind: "127.0.0.1:47890"
   data_dir: "` + dir + `"
 scheduler:
   update_check_interval: "6h"
@@ -232,7 +232,7 @@ func TestWriteDefaultRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`bind: "0.0.0.0:7890"`,
+		`bind: "0.0.0.0:47890"`,
 		`session_ttl: "720h"`,
 		`hmac_timestamp_window: "300s"`,
 		`nonce_burst_per_minute: 1000`,

@@ -64,10 +64,10 @@ amd64 / arm64），发布到 [GitHub Releases](https://github.com/yeluonight/ski
 curl -fsSL \
   https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install.sh | SKILLFLEET_COMPONENT=server sh
 
-skillfleet-server          # 监听 :7890，首次启动在 stderr 打印 setup code
+skillfleet-server          # 监听 :47890，首次启动在 stderr 打印 setup code
 ```
 
-打开 `http://<host>:7890`，用 stderr 里的 setup code 完成管理员初始化。Server 开箱即跑
+打开 `http://<host>:47890`，用 stderr 里的 setup code 完成管理员初始化。Server 开箱即跑
 （默认数据目录 `~/.skillfleet/server`，无需 config.yaml）。
 
 ### 2. 在每台设备上安装 Agent
@@ -90,7 +90,7 @@ irm https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install
 
 ```bash
 # 1) 在 WebUI mint 一个 enrollment token，然后：
-skillfleet-agent enroll http://<server>:7890 <token>
+skillfleet-agent enroll http://<server>:47890 <token>
 
 # 2) 回 WebUI 的 Devices 页批准该设备
 

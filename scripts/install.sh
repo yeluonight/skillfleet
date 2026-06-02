@@ -137,7 +137,7 @@ else
   cat >&2 <<'EOF'
 
 Next steps:
-  skillfleet-server                                    # starts on :7890; prints a setup code
-  Open http://<host>:7890 and complete setup with that code.
+  skillfleet-server                                    # starts on :47890; prints a setup code
+  Open http://<host>:47890 and complete setup with that code.
 EOF
 fi

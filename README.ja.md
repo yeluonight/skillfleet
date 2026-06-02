@@ -66,10 +66,10 @@ windows × amd64 / arm64）、[GitHub Releases](https://github.com/yeluonight/sk
 curl -fsSL \
   https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install.sh | SKILLFLEET_COMPONENT=server sh
 
-skillfleet-server          # :7890 で待受、初回起動時に stderr へ setup code を出力
+skillfleet-server          # :47890 で待受、初回起動時に stderr へ setup code を出力
 ```
 
-`http://<host>:7890` を開き、stderr の setup code で管理者初期化を完了します。Server は
+`http://<host>:47890` を開き、stderr の setup code で管理者初期化を完了します。Server は
 そのまま動作します（デフォルトデータディレクトリ `~/.skillfleet/server`、config.yaml 不要）。
 
 ### 2. 各デバイスに Agent をインストール
@@ -92,7 +92,7 @@ irm https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install
 
 ```bash
 # 1) WebUI で enrollment token を発行し、次を実行：
-skillfleet-agent enroll http://<server>:7890 <token>
+skillfleet-agent enroll http://<server>:47890 <token>
 
 # 2) WebUI の Devices ページでそのデバイスを承認
 

@@ -66,10 +66,10 @@ windows × amd64 / arm64) and published to
 curl -fsSL \
   https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install.sh | SKILLFLEET_COMPONENT=server sh
 
-skillfleet-server          # listens on :7890, prints a setup code to stderr on first run
+skillfleet-server          # listens on :47890, prints a setup code to stderr on first run
 ```
 
-Open `http://<host>:7890` and complete admin setup with the setup code from stderr. The server
+Open `http://<host>:47890` and complete admin setup with the setup code from stderr. The server
 runs out of the box (default data dir `~/.skillfleet/server`, no config.yaml required).
 
 ### 2. Install the Agent on each device
@@ -92,7 +92,7 @@ The installer detects your platform, verifies the SHA256, and installs to a dire
 
 ```bash
 # 1) Mint an enrollment token in the WebUI, then:
-skillfleet-agent enroll http://<server>:7890 <token>
+skillfleet-agent enroll http://<server>:47890 <token>
 
 # 2) Approve the device on the WebUI Devices page
 
