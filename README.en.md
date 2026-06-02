@@ -88,7 +88,7 @@ irm https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install
 The installer detects your platform, verifies the SHA256, and installs to a directory on your PATH
 (override with `INSTALL_DIR` / `SKILLFLEET_VERSION`).
 
-### 3. Enroll and enable the Agent
+### 3. Enroll the Agent and configure roots
 
 ```bash
 # 1) Mint an enrollment token in the WebUI, then:
@@ -96,19 +96,32 @@ skillfleet-agent enroll http://<server>:7890 <token>
 
 # 2) Approve the device on the WebUI Devices page
 
-# 3) Register the skill directories to manage on this host
-#    (required! otherwise install / enable-disable jobs cannot run):
-skillfleet-agent roots add -tool claude-code -scope user -path ~/.claude/skills
-skillfleet-agent roots add -tool codex       -scope user -path ~/.agents/skills
-skillfleet-agent roots list                 # list registered roots
-
-# 4) Run the long-lived loop (heartbeat + scan/report + pull downlink jobs)
+# 3) Run the long-lived loop (heartbeat + candidate root scan + inventory report + jobs)
 skillfleet-agent
 ```
 
-> `enroll` writes only the device identity, **not allowed_roots**. Without at least one
-> `roots add`, the agent can scan and report, but any install / enable-disable job will fail
-> because it cannot resolve a target root.
+After the first report, go back to the WebUI Devices / Roots area and register the local skill
+root this device is allowed to manage. Common candidates include:
+
+```text
+Claude Code  ~/.claude/skills
+Codex        ~/.agents/skills
+```
+
+Once a root is registered, install / enable-disable jobs can write to that directory. If no
+candidate is shown, or you need to allow a custom directory manually, use the CLI fallback on that
+device:
+
+```bash
+skillfleet-agent roots scan
+skillfleet-agent roots add -tool claude-code -scope user -path ~/.claude/skills
+skillfleet-agent roots list
+```
+
+> `enroll` writes only the device identity, **not allowed_roots**. You must register a candidate
+> root from the WebUI, or manually allow at least one directory with `roots add`; otherwise the
+> agent can scan and report, but install / enable-disable jobs will fail because no target root can
+> be resolved.
 
 ### Keep the Agent running (systemd user service example)
 
@@ -140,7 +153,7 @@ journalctl --user -u skillfleet-agent -f      # follow logs
 
 ## 🛠️ Development
 
-**Requirements**: Go ≥ 1.25 · Node.js ≥ 20 · npm ≥ 10 · Git ≥ 2.40
+**Requirements**: Go ≥ 1.25 · Node.js ≥ 24 · npm ≥ 11 · Git ≥ 2.40
 
 ```bash
 make dev          # run Server + WebUI dev together

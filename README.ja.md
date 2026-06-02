@@ -88,7 +88,7 @@ irm https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install
 インストーラはプラットフォームを自動判別し、SHA256 を検証して PATH 上のディレクトリに
 インストールします（`INSTALL_DIR` / `SKILLFLEET_VERSION` で上書き可能）。
 
-### 3. Agent を登録して有効化
+### 3. Agent を登録し、roots を設定
 
 ```bash
 # 1) WebUI で enrollment token を発行し、次を実行：
@@ -96,19 +96,31 @@ skillfleet-agent enroll http://<server>:7890 <token>
 
 # 2) WebUI の Devices ページでそのデバイスを承認
 
-# 3) このホストで管理する skill ディレクトリを登録
-#    （必須！これがないとインストール / 有効化・無効化ジョブが実行できません）：
-skillfleet-agent roots add -tool claude-code -scope user -path ~/.claude/skills
-skillfleet-agent roots add -tool codex       -scope user -path ~/.agents/skills
-skillfleet-agent roots list                 # 登録済み roots を表示
-
-# 4) 常駐ループを起動（ハートビート + スキャン報告 + 下りジョブ取得）
+# 3) 常駐ループを起動（ハートビート + 候補 roots スキャン + inventory 報告 + ジョブ取得）
 skillfleet-agent
 ```
 
-> `enroll` はデバイス ID のみを書き込み、**allowed_roots は含みません**。少なくとも 1 つ
-> `roots add` しないと、agent はスキャン報告はできても、インストール / 有効化・無効化ジョブは
-> 対象ルートを解決できず失敗します。
+初回報告後、WebUI の Devices / Roots で、このデバイスに管理を許可するローカル skill root を
+候補から登録します。代表的な候補は次のとおりです：
+
+```text
+Claude Code  ~/.claude/skills
+Codex        ~/.agents/skills
+```
+
+root 登録後、インストール / 有効化・無効化ジョブがそのディレクトリへ書き込めるようになります。
+候補が表示されない場合や、カスタムディレクトリを手動で許可したい場合は、そのデバイスで CLI を
+使って登録できます：
+
+```bash
+skillfleet-agent roots scan
+skillfleet-agent roots add -tool claude-code -scope user -path ~/.claude/skills
+skillfleet-agent roots list
+```
+
+> `enroll` はデバイス ID のみを書き込み、**allowed_roots は含みません**。WebUI で候補 root を
+> 登録するか、`roots add` で少なくとも 1 つのディレクトリを手動許可してください。そうしないと
+> agent はスキャン報告はできても、インストール / 有効化・無効化ジョブは対象 root を解決できず失敗します。
 
 ### Agent を常駐させる（systemd ユーザーサービスの例）
 
@@ -140,7 +152,7 @@ journalctl --user -u skillfleet-agent -f      # ログを追う
 
 ## 🛠️ 開発
 
-**要件**：Go ≥ 1.25 · Node.js ≥ 20 · npm ≥ 10 · Git ≥ 2.40
+**要件**：Go ≥ 1.25 · Node.js ≥ 24 · npm ≥ 11 · Git ≥ 2.40
 
 ```bash
 make dev          # Server + WebUI dev を同時に起動

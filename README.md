@@ -86,7 +86,7 @@ irm https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install
 安装脚本自动识别平台、校验 SHA256、装到 PATH 上的目录（可用 `INSTALL_DIR` /
 `SKILLFLEET_VERSION` 覆盖）。
 
-### 3. 注册并启用 Agent
+### 3. 注册 Agent 并配置 roots
 
 ```bash
 # 1) 在 WebUI mint 一个 enrollment token，然后：
@@ -94,17 +94,30 @@ skillfleet-agent enroll http://<server>:7890 <token>
 
 # 2) 回 WebUI 的 Devices 页批准该设备
 
-# 3) 注册本机要被管理的 skill 目录（关键！否则安装 / 启停任务无法执行）：
-skillfleet-agent roots add -tool claude-code -scope user -path ~/.claude/skills
-skillfleet-agent roots add -tool codex       -scope user -path ~/.agents/skills
-skillfleet-agent roots list                 # 查看已注册的 roots
-
-# 4) 启动常驻 loop（心跳 + 扫描上报 + 领取下行任务）
+# 3) 启动常驻 loop（心跳 + 扫描候选 roots + 上报 inventory + 领取下行任务）
 skillfleet-agent
 ```
 
-> `enroll` 只写设备身份，**不含 allowed_roots**；不先 `roots add` 至少一个目录，
-> agent 能扫描上报但收到的安装 / 启停任务会因解析不到目标根而失败。
+Agent 首次上报后，回到 WebUI 的 Devices / Roots 区域，从候选目录里注册本机允许管理的
+skill root。常见候选包括：
+
+```text
+Claude Code  ~/.claude/skills
+Codex        ~/.agents/skills
+```
+
+注册完成后，安装 / 启停任务才会写入对应目录。没有候选、或需要手动放行自定义目录时，
+也可以在该设备上用 CLI 兜底：
+
+```bash
+skillfleet-agent roots scan
+skillfleet-agent roots add -tool claude-code -scope user -path ~/.claude/skills
+skillfleet-agent roots list
+```
+
+> `enroll` 只写设备身份，**不含 allowed_roots**；必须通过 WebUI 注册候选 root，
+> 或用 `roots add` 手动放行至少一个目录，否则 agent 能扫描上报，但安装 / 启停任务会因
+> 解析不到目标根而失败。
 
 ### 让 Agent 常驻（systemd 用户服务示例）
 
@@ -136,7 +149,7 @@ journalctl --user -u skillfleet-agent -f      # 看日志
 
 ## 🛠️ 开发
 
-**依赖**：Go ≥ 1.25 · Node.js ≥ 20 · npm ≥ 10 · Git ≥ 2.40
+**依赖**：Go ≥ 1.25 · Node.js ≥ 24 · npm ≥ 11 · Git ≥ 2.40
 
 ```bash
 make dev          # Server + WebUI dev 同时跑

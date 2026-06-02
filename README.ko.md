@@ -87,7 +87,7 @@ irm https://raw.githubusercontent.com/yeluonight/skillfleet/main/scripts/install
 설치 스크립트는 플랫폼을 자동 인식하고 SHA256을 검증한 뒤 PATH에 있는 디렉터리에
 설치합니다(`INSTALL_DIR` / `SKILLFLEET_VERSION`으로 재정의 가능).
 
-### 3. Agent 등록 및 활성화
+### 3. Agent 등록 및 roots 설정
 
 ```bash
 # 1) WebUI에서 enrollment token을 발급한 뒤:
@@ -95,19 +95,30 @@ skillfleet-agent enroll http://<server>:7890 <token>
 
 # 2) WebUI의 Devices 페이지에서 해당 기기를 승인
 
-# 3) 이 호스트에서 관리할 skill 디렉터리를 등록
-#    (필수! 그렇지 않으면 설치 / 활성화·비활성화 작업을 실행할 수 없음):
-skillfleet-agent roots add -tool claude-code -scope user -path ~/.claude/skills
-skillfleet-agent roots add -tool codex       -scope user -path ~/.agents/skills
-skillfleet-agent roots list                 # 등록된 roots 보기
-
-# 4) 상주 loop 실행 (하트비트 + 스캔 보고 + 다운링크 작업 수신)
+# 3) 상주 loop 실행 (하트비트 + 후보 roots 스캔 + inventory 보고 + 다운링크 작업 수신)
 skillfleet-agent
 ```
 
-> `enroll`은 기기 신원만 기록하며 **allowed_roots는 포함하지 않습니다**. 최소 하나의
-> `roots add` 없이는 agent가 스캔·보고는 할 수 있어도, 설치 / 활성화·비활성화 작업은 대상
-> 루트를 해석하지 못해 실패합니다.
+최초 보고 후 WebUI의 Devices / Roots 영역에서 이 기기가 관리할 수 있는 로컬 skill root를
+후보 목록에서 등록합니다. 일반적인 후보는 다음과 같습니다:
+
+```text
+Claude Code  ~/.claude/skills
+Codex        ~/.agents/skills
+```
+
+root 등록이 끝나면 설치 / 활성화·비활성화 작업이 해당 디렉터리에 쓸 수 있습니다. 후보가 없거나
+사용자 지정 디렉터리를 수동으로 허용해야 한다면, 해당 기기에서 CLI fallback을 사용할 수 있습니다:
+
+```bash
+skillfleet-agent roots scan
+skillfleet-agent roots add -tool claude-code -scope user -path ~/.claude/skills
+skillfleet-agent roots list
+```
+
+> `enroll`은 기기 신원만 기록하며 **allowed_roots는 포함하지 않습니다**. WebUI에서 후보 root를
+> 등록하거나 `roots add`로 최소 하나의 디렉터리를 수동 허용해야 합니다. 그렇지 않으면 agent가
+> 스캔·보고는 할 수 있어도 설치 / 활성화·비활성화 작업은 대상 root를 해석하지 못해 실패합니다.
 
 ### Agent 상주 실행 (systemd 사용자 서비스 예시)
 
@@ -139,7 +150,7 @@ journalctl --user -u skillfleet-agent -f      # 로그 확인
 
 ## 🛠️ 개발
 
-**요구 사항**: Go ≥ 1.25 · Node.js ≥ 20 · npm ≥ 10 · Git ≥ 2.40
+**요구 사항**: Go ≥ 1.25 · Node.js ≥ 24 · npm ≥ 11 · Git ≥ 2.40
 
 ```bash
 make dev          # Server + WebUI dev 동시 실행
