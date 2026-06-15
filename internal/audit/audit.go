@@ -125,6 +125,123 @@ func (l *Logger) WriteSync(ctx context.Context, r Record) error {
 	return err
 }
 
+// ListFilter narrows List. Zero-value fields are ignored, so the empty
+// filter returns the most recent rows up to Limit. Times are ms epoch:
+// Since is an inclusive lower bound (created_at >= Since), Until an
+// exclusive upper bound (created_at < Until) — the exclusive upper bound
+// lets a caller page backwards by passing the previous page's oldest
+// created_at as the next Until without re-seeing that boundary row.
+type ListFilter struct {
+	// ActionPrefix matches the dotted action namespace by prefix, e.g.
+	// "device." selects device.approved / device.revoked / ... Action
+	// strings never contain LIKE wildcards, so a literal "%"-suffix LIKE is
+	// safe without ESCAPE.
+	ActionPrefix string
+	// ActorType filters by actor kind ("user" | "agent" | "system"); the
+	// WebUI's three actor lanes map straight onto it.
+	ActorType string
+	// TargetID filters to one mutated object (a device id, skill name, ...)
+	// for "show everything that happened to X".
+	TargetID string
+	Since    int64
+	Until    int64
+	// Limit caps the page; <=0 → DefaultListLimit, and anything over
+	// MaxListLimit is clamped so one query can't scan the whole table.
+	Limit int
+}
+
+const (
+	// DefaultListLimit is the page size when ListFilter.Limit is unset.
+	DefaultListLimit = 50
+	// MaxListLimit caps ListFilter.Limit so a single page stays bounded.
+	MaxListLimit = 500
+)
+
+// Entry is one audit_logs row as read back by List. Nullable columns
+// surface as the Go zero value ("" / nil Detail); Detail is the raw
+// detail_json so callers (the WebUI audit page) render it verbatim.
+type Entry struct {
+	ID         string
+	ActorType  string
+	ActorID    string
+	Action     string
+	TargetType string
+	TargetID   string
+	Detail     json.RawMessage
+	CreatedAt  time.Time
+}
+
+// List returns audit rows matching f, newest first (created_at DESC, id
+// DESC for a stable tiebreak). Unlike Write it surfaces its error: a query
+// failure is a real API error, not a best-effort side line.
+func (l *Logger) List(ctx context.Context, f ListFilter) ([]Entry, error) {
+	q := `
+		SELECT id, actor_type, actor_id, action, target_type, target_id, detail_json, created_at
+		  FROM audit_logs
+		 WHERE 1 = 1`
+	var args []any
+	if f.ActionPrefix != "" {
+		q += ` AND action LIKE ?`
+		args = append(args, f.ActionPrefix+"%")
+	}
+	if f.ActorType != "" {
+		q += ` AND actor_type = ?`
+		args = append(args, f.ActorType)
+	}
+	if f.TargetID != "" {
+		q += ` AND target_id = ?`
+		args = append(args, f.TargetID)
+	}
+	if f.Since > 0 {
+		q += ` AND created_at >= ?`
+		args = append(args, f.Since)
+	}
+	if f.Until > 0 {
+		q += ` AND created_at < ?`
+		args = append(args, f.Until)
+	}
+	limit := f.Limit
+	if limit <= 0 {
+		limit = DefaultListLimit
+	}
+	if limit > MaxListLimit {
+		limit = MaxListLimit
+	}
+	q += ` ORDER BY created_at DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := l.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("audit: list: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []Entry
+	for rows.Next() {
+		var (
+			e          Entry
+			actorID    sql.NullString
+			targetType sql.NullString
+			targetID   sql.NullString
+			detail     sql.NullString
+			createdMS  int64
+		)
+		if err := rows.Scan(&e.ID, &e.ActorType, &actorID, &e.Action,
+			&targetType, &targetID, &detail, &createdMS); err != nil {
+			return nil, fmt.Errorf("audit: scan: %w", err)
+		}
+		e.ActorID = actorID.String
+		e.TargetType = targetType.String
+		e.TargetID = targetID.String
+		if detail.Valid {
+			e.Detail = json.RawMessage(detail.String)
+		}
+		e.CreatedAt = time.UnixMilli(createdMS)
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 func nullable(s string) any {
 	if s == "" {
 		return nil

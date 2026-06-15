@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Cpu, Copy, RefreshCw, AlertCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -23,6 +24,7 @@ import { useAsyncAction } from "@/hooks/useAsyncAction"
 // / revoke actions) lives in DevicesList.tsx and renders alongside
 // this card in the dashboard.
 export function DevicesCard() {
+  const { t } = useTranslation()
   const [issued, setIssued] = useState<CreateEnrollmentTokenResponse | null>(null)
   // Captured once at mount + on every list refresh so the render path
   // never calls Date.now() (eslint react-hooks/purity).
@@ -68,31 +70,31 @@ export function DevicesCard() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Cpu className="text-primary size-5" aria-hidden />
-            Devices
+            {t("devices.title")}
           </CardTitle>
           <CardDescription>
-            Mint an enrolment token, then run{" "}
+            {t("devices.enrollDescPrefix")}
             <code className="font-mono text-xs">
               skillfleet-agent enroll &lt;url&gt; &lt;token&gt;
-            </code>{" "}
-            on the target host. Approve the device below once it shows up.
+            </code>
+            {t("devices.enrollDescSuffix")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-2">
             <Button onClick={generate} disabled={action.busy}>
-              {action.busy ? "Generating…" : "Generate enrollment token"}
+              {action.busy ? t("devices.generating") : t("devices.generateToken")}
             </Button>
             <Button variant="ghost" size="sm" onClick={refresh} disabled={action.busy}>
               <RefreshCw className="size-4" aria-hidden />
-              Refresh
+              {t("common.refresh")}
             </Button>
           </div>
 
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="size-4" aria-hidden />
-              <AlertTitle>Token error</AlertTitle>
+              <AlertTitle>{t("devices.tokenError")}</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
@@ -115,28 +117,31 @@ function TokenList({
   renderedAt: number
   onRevoke: (id: string) => void
 }) {
+  const { t } = useTranslation()
   if (tokens === null) {
-    return <p className="text-muted-foreground text-sm">Loading tokens…</p>
+    return <p className="text-muted-foreground text-sm">{t("devices.loadingTokens")}</p>
   }
   if (tokens.length === 0) {
-    return <p className="text-muted-foreground text-sm">No tokens yet.</p>
+    return <p className="text-muted-foreground text-sm">{t("devices.noTokens")}</p>
   }
   return (
     <ul className="divide-border divide-y rounded-md border">
-      {tokens.map((t) => {
-        const expired = t.status === "pending" && t.expires_at < renderedAt
+      {tokens.map((tok) => {
+        const expired = tok.status === "pending" && tok.expires_at < renderedAt
         return (
-          <li key={t.id} className="flex items-center justify-between gap-4 px-3 py-2">
+          <li key={tok.id} className="flex items-center justify-between gap-4 px-3 py-2">
             <div className="space-y-0.5">
-              <div className="font-mono text-xs">{t.id}</div>
+              <div className="font-mono text-xs">{tok.id}</div>
               <div className="text-muted-foreground text-xs">
-                <StatusBadge status={expired ? "expired" : t.status} />
-                <span className="ml-2">expires {new Date(t.expires_at).toLocaleString()}</span>
+                <TokenStatusBadge status={expired ? "expired" : tok.status} />
+                <span className="ml-2">
+                  {t("devices.expiresAt", { time: new Date(tok.expires_at).toLocaleString() })}
+                </span>
               </div>
             </div>
-            {t.status === "pending" && !expired && (
-              <Button variant="ghost" size="sm" onClick={() => onRevoke(t.id)}>
-                Revoke
+            {tok.status === "pending" && !expired && (
+              <Button variant="ghost" size="sm" onClick={() => onRevoke(tok.id)}>
+                {t("devices.revoke")}
               </Button>
             )}
           </li>
@@ -146,16 +151,25 @@ function TokenList({
   )
 }
 
-function StatusBadge({ status }: { status: string }) {
+// TokenStatusBadge colours the enrollment-token lifecycle (pending/used/
+// revoked/expired) with semantic state tokens; the label is localised.
+function TokenStatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation()
   const colour =
     status === "pending"
-      ? "text-amber-600"
+      ? "text-state-warn-600"
       : status === "used"
-        ? "text-emerald-600"
+        ? "text-state-clean-600"
+        : "text-muted-foreground"
+  const label =
+    status === "pending"
+      ? t("devices.tokenStatus.pending")
+      : status === "used"
+        ? t("devices.tokenStatus.used")
         : status === "revoked"
-          ? "text-muted-foreground"
-          : "text-muted-foreground"
-  return <span className={`font-medium uppercase tracking-wide ${colour}`}>{status}</span>
+          ? t("devices.tokenStatus.revoked")
+          : t("devices.tokenStatus.expired")
+  return <span className={`font-medium uppercase tracking-wide ${colour}`}>{label}</span>
 }
 
 function IssuedTokenDialog({
@@ -165,6 +179,7 @@ function IssuedTokenDialog({
   issued: CreateEnrollmentTokenResponse | null
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
   async function copyToken() {
@@ -188,10 +203,11 @@ function IssuedTokenDialog({
     >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>New enrollment token</DialogTitle>
+          <DialogTitle>{t("devices.newTokenTitle")}</DialogTitle>
           <DialogDescription>
-            Copy this token now — it will not be shown again. It expires at{" "}
-            {issued ? new Date(issued.expires_at).toLocaleString() : ""}.
+            {t("devices.newTokenDesc", {
+              time: issued ? new Date(issued.expires_at).toLocaleString() : "",
+            })}
           </DialogDescription>
         </DialogHeader>
         {issued && (
@@ -201,10 +217,10 @@ function IssuedTokenDialog({
             </div>
             <Button onClick={copyToken} className="w-full" variant="secondary">
               <Copy className="size-4" aria-hidden />
-              {copied ? "Copied!" : "Copy token"}
+              {copied ? t("devices.copied") : t("devices.copyToken")}
             </Button>
             <p className="text-muted-foreground text-xs">
-              Run on the agent host:
+              {t("devices.runOnAgentHost")}
               <br />
               <code className="font-mono">
                 skillfleet-agent enroll &lt;server-url&gt; {issued.token}
@@ -214,7 +230,7 @@ function IssuedTokenDialog({
         )}
         <DialogFooter>
           <Button onClick={onClose} variant="ghost" className="w-full sm:w-auto">
-            Done
+            {t("devices.done")}
           </Button>
         </DialogFooter>
       </DialogContent>

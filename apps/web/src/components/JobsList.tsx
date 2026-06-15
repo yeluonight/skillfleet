@@ -7,6 +7,7 @@ import {
   RotateCcw,
   Rocket,
 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -38,12 +39,13 @@ export function JobsList({
   rollbackBusyId = null,
   renderedAt,
 }: JobsListProps) {
+  const { t } = useTranslation()
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Rocket className="text-primary size-4" aria-hidden />
-          部署任务
+          {t("deploys.jobsTitle")}
         </div>
         {onRefresh ? (
           <Button type="button" size="sm" variant="ghost" onClick={onRefresh} disabled={loading}>
@@ -52,7 +54,7 @@ export function JobsList({
             ) : (
               <RefreshCw className="size-4" aria-hidden />
             )}
-            刷新
+            {t("common.refresh")}
           </Button>
         ) : null}
       </div>
@@ -60,15 +62,15 @@ export function JobsList({
       {error ? (
         <Alert variant="destructive">
           <AlertCircle className="size-4" aria-hidden />
-          <AlertTitle>加载失败</AlertTitle>
+          <AlertTitle>{t("deploys.loadFailed")}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
 
       {jobs.length === 0 && !loading && !error ? (
         <div className="text-muted-foreground flex items-center gap-2 rounded-md border border-dashed px-3 py-4 text-sm">
-          <CheckCircle2 className="size-4 shrink-0 text-emerald-600" aria-hidden />
-          <span>暂无部署任务</span>
+          <CheckCircle2 className="text-state-clean-600 size-4 shrink-0" aria-hidden />
+          <span>{t("deploys.noJobs")}</span>
         </div>
       ) : null}
 
@@ -100,6 +102,7 @@ function JobRow({
   onRollback?: (jobId: string) => void
   rollbackBusy: boolean
 }) {
+  const { t } = useTranslation()
   const title = job.skill_name || job.version_id || "—"
   const canRollback =
     !!onRollback && job.operation === "install" && job.status === "succeeded"
@@ -113,8 +116,8 @@ function JobRow({
             <OperationBadge operation={job.operation} />
             <DeploymentStatusBadge status={job.status} />
             {job.rolled_back ? (
-              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
-                已回滚
+              <span className="bg-state-warn-50 text-state-warn-600 rounded px-1.5 py-0.5 text-[10px] font-medium">
+                {t("deploys.rolledBack")}
               </span>
             ) : null}
           </div>
@@ -124,7 +127,7 @@ function JobRow({
             {renderedAt ? <span>· {formatRelativeTime(job.updated_at, renderedAt, "")}</span> : null}
           </div>
           {job.status === "failed" && job.error_message ? (
-            <p className="mt-1 text-xs text-red-600">
+            <p className="text-state-danger-600 mt-1 text-xs">
               {job.error_code ? `${job.error_code}: ` : ""}
               {job.error_message}
             </p>
@@ -144,7 +147,7 @@ function JobRow({
               ) : (
                 <RotateCcw className="size-4" aria-hidden />
               )}
-              回滚
+              {t("deploys.rollback")}
             </Button>
           </div>
         ) : null}

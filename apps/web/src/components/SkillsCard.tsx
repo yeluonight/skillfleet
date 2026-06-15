@@ -1,5 +1,6 @@
 import { useRef, useState } from "react"
 import { AlertCircle, ChevronDown, ChevronRight, FileText, Link2, Package, Plus, Upload } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,13 +17,14 @@ import { SkillDetailPanel } from "@/components/SkillDetailPanel"
 // a create form, a zip importer, and per-skill expansion into versions
 // + file tree + a plain draft editor (Monaco lands in Phase 5).
 export function SkillsCard() {
+  const { t } = useTranslation()
   const {
     data: skillsData,
     error: loadError,
     refresh,
     setError: setLoadError,
   } = useApiResource<{ skills: SkillSummary[] }>(() => api.listSkills(), {
-    errorFallback: "Failed to load skills.",
+    errorFallback: t("skills.err.loadSkills"),
   })
   const skills = skillsData?.skills ?? null
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -38,7 +40,7 @@ export function SkillsCard() {
     const name = newName.trim()
     if (!name) return
     setLoadError(null)
-    const ok = await action.run(() => api.createSkill(name), "Failed to create skill.")
+    const ok = await action.run(() => api.createSkill(name), t("skills.err.createSkill"))
     if (ok) {
       setNewName("")
       setCreating(false)
@@ -48,7 +50,7 @@ export function SkillsCard() {
 
   async function handleImport(file: File) {
     setLoadError(null)
-    await action.run(() => api.importSkillZip(file), "Failed to import zip.")
+    await action.run(() => api.importSkillZip(file), t("skills.err.importZip"))
     if (fileInput.current) fileInput.current.value = ""
     await refresh()
   }
@@ -58,11 +60,10 @@ export function SkillsCard() {
       <CardHeader>
         <CardTitle className="text-lg flex items-center gap-2">
           <Package className="text-primary size-5" aria-hidden />
-          Skills registry
+          {t("skills.registryTitle")}
         </CardTitle>
         <CardDescription>
-          Multi-file Skill packages with immutable versions. Create a blank skill, import a zip, or
-          fork a version into an editable draft and publish a new version.
+          {t("skills.registryDesc")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -70,7 +71,7 @@ export function SkillsCard() {
           <div className="flex items-center gap-2">
             <Button size="sm" variant={creating ? "secondary" : "default"} onClick={() => setCreating((v) => !v)}>
               <Plus className="size-4" aria-hidden />
-              New skill
+              {t("skills.newSkill")}
             </Button>
             <Button
               size="sm"
@@ -79,7 +80,7 @@ export function SkillsCard() {
               onClick={() => fileInput.current?.click()}
             >
               <Upload className="size-4" aria-hidden />
-              Import zip
+              {t("skills.importZip")}
             </Button>
             <input
               ref={fileInput}
@@ -108,7 +109,7 @@ export function SkillsCard() {
               className="max-w-xs"
             />
             <Button size="sm" onClick={handleCreate} disabled={action.busy || !newName.trim()}>
-              {action.busy ? "Creating…" : "Create"}
+              {action.busy ? t("skills.creating") : t("skills.create")}
             </Button>
           </div>
         )}
@@ -116,7 +117,7 @@ export function SkillsCard() {
         {error && (
           <Alert variant="destructive">
             <AlertCircle className="size-4" aria-hidden />
-            <AlertTitle>Registry error</AlertTitle>
+            <AlertTitle>{t("skills.registryError")}</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -143,13 +144,14 @@ function SkillList({
   onToggle: (name: string) => void
   onChanged: () => void
 }) {
+  const { t } = useTranslation()
   if (skills === null) {
-    return <p className="text-muted-foreground text-sm">Loading skills…</p>
+    return <p className="text-muted-foreground text-sm">{t("skills.loadingSkills")}</p>
   }
   if (skills.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
-        No skills yet. Create a blank skill or import a zip to get started.
+        {t("skills.noSkills")}
       </p>
     )
   }
@@ -174,16 +176,16 @@ function SkillList({
                 <span className="text-sm font-medium">{s.name}</span>
                 {s.source_state === "bound" ? (
                   <span
-                    className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600"
-                    title="已绑定上游来源"
+                    className="bg-state-clean-50 text-state-clean-600 border-state-clean-500/30 inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium"
+                    title={t("skills.boundTooltip")}
                   >
                     <Link2 className="size-3" aria-hidden />
-                    bound
+                    {t("skills.bound")}
                   </span>
                 ) : null}
               </button>
               <div className="text-muted-foreground text-xs">
-                {s.version_count} version{s.version_count === 1 ? "" : "s"} · {s.latest_kind}
+                {t("skills.versionCount", { count: s.version_count, kind: s.latest_kind })}
               </div>
             </div>
             {open ? <SkillDetailPanel name={s.name} onChanged={onChanged} /> : null}

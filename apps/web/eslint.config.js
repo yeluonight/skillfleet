@@ -25,4 +25,16 @@ export default defineConfig([
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    // E2E specs + Playwright config run under Node, not the browser, and are
+    // not React modules — give them Node globals and drop the React-only rules.
+    files: ['e2e/**/*.{ts,tsx}', 'playwright.config.ts'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
+    rules: {
+      'react-refresh/only-export-components': 'off',
+      'react-hooks/rules-of-hooks': 'off',
+    },
+  },
 ])

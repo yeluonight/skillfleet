@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { Editor } from "@monaco-editor/react"
 import type { editor } from "monaco-editor"
+import { useTranslation } from "react-i18next"
 
 import { languageForPath } from "@/lib/language-map"
 
@@ -38,6 +39,7 @@ export function MonacoFileEditor({
   height = "16rem",
   onReady,
 }: MonacoFileEditorProps) {
+  const { t } = useTranslation()
   const [isDark, setIsDark] = useState<boolean>(
     () => document.documentElement.classList.contains("dark"),
   )
@@ -85,7 +87,7 @@ export function MonacoFileEditor({
       onMount={handleMount}
       height={height}
       loading={
-        <span className="text-muted-foreground text-xs">Loading editor…</span>
+        <span className="text-muted-foreground text-xs">{t("skills.loadingEditor")}</span>
       }
       options={{
         lineNumbers: "on",

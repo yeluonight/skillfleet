@@ -1,4 +1,5 @@
 import { ArrowRight } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -51,6 +52,7 @@ export function ChangeStateDialog({
   onApplied?: () => void
 }) {
   const options = supportedStatesForTool(toolKey)
+  const { t } = useTranslation()
   const [desired, setDesired] = useState<EffectiveState>(currentState)
   const [done, setDone] = useState(false)
   const action = useAsyncAction()
@@ -65,7 +67,7 @@ export function ChangeStateDialog({
           device_id: deviceId,
           desired_state: desired,
         }),
-      "状态变更下发失败。",
+      t("deploys.err.changeState"),
     )
     if (ok) {
       setDone(true)
@@ -79,7 +81,7 @@ export function ChangeStateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>更改启停状态</DialogTitle>
+          <DialogTitle>{t("deploys.changeStateTitle")}</DialogTitle>
           <DialogDescription>
             {skillName} · {toolKey} · {scope}
           </DialogDescription>
@@ -88,17 +90,17 @@ export function ChangeStateDialog({
         {done ? (
           <div className="space-y-2 text-sm">
             <p>
-              已下发：将 <span className="font-medium">{skillName}</span> 设为{" "}
-              <StateBadge state={desired} />。
+              {t("deploys.appliedPrefix")} <span className="font-medium">{skillName}</span>{" "}
+              {t("deploys.appliedSuffix")} <StateBadge state={desired} />。
             </p>
             <p className="text-muted-foreground text-xs">
-              设备上线领取任务后写入工具配置；下次设备扫描后矩阵会反映新状态。
+              {t("deploys.appliedScanHint")}
             </p>
           </div>
         ) : (
           <div className="space-y-3">
             <label className="block text-sm">
-              <span className="text-muted-foreground mb-1 block text-xs">目标状态</span>
+              <span className="text-muted-foreground mb-1 block text-xs">{t("deploys.targetState")}</span>
               <select
                 className="bg-background h-9 w-full rounded-md border px-2 text-sm"
                 value={desired}
@@ -120,20 +122,22 @@ export function ChangeStateDialog({
               <StateBadge state={desired} />
             </div>
 
-            {action.error ? <p className="text-sm text-red-600">{action.error}</p> : null}
+            <p className="text-muted-foreground text-xs">{t("deploys.auditNote")}</p>
+
+            {action.error ? <p className="text-state-danger-600 text-sm">{action.error}</p> : null}
           </div>
         )}
 
         <DialogFooter>
           {done ? (
-            <Button onClick={() => onOpenChange(false)}>完成</Button>
+            <Button onClick={() => onOpenChange(false)}>{t("deploys.confirmDone")}</Button>
           ) : (
             <>
               <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={action.busy}>
-                取消
+                {t("common.cancel")}
               </Button>
               <Button onClick={apply} disabled={action.busy || unchanged}>
-                {unchanged ? "状态未变" : "确认下发"}
+                {unchanged ? t("deploys.stateUnchanged") : t("deploys.confirmApply")}
               </Button>
             </>
           )}

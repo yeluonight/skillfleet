@@ -196,6 +196,18 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("GET /api/updates",
 		d.requireAuth(http.HandlerFunc(d.handleListUpdates)))
 
+	// Dashboard aggregate (phase 12 t1, §13.8.2): six headline metric cards +
+	// Top Action Items, composed from devices / registry / the §13.7 update
+	// dimensions / deployment jobs. Read-only (auth, no CSRF).
+	mux.Handle("GET /api/dashboard",
+		d.requireAuth(http.HandlerFunc(d.handleDashboard)))
+
+	// Audit Page (phase 12 t1, §13.8.17): a filterable reverse-chronological
+	// timeline of audit_logs. Read-only (auth, no CSRF) — it only reads the
+	// append-only log the write paths already populate.
+	mux.Handle("GET /api/audit",
+		d.requireAuth(http.HandlerFunc(d.handleListAudit)))
+
 	// Upstream diff (phase 6 t10, §17 task 6): two-way file-level comparison
 	// between a bound skill's baseline upstream and its pending upstream
 	// version. Read-only (auth, no CSRF). {id} is the skill name.

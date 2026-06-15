@@ -7,6 +7,7 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command"
+import { useTranslation } from "react-i18next"
 
 /**
  * A single action that can be invoked from the command palette.
@@ -39,12 +40,13 @@ export interface CommandPaletteProps {
  * delegates close/select back via `onOpenChange`.
  */
 export function CommandPalette({ open, onOpenChange, actions }: CommandPaletteProps) {
+  const { t } = useTranslation()
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <CommandInput placeholder="Type a command or search…" />
+      <CommandInput placeholder={t("skills.palette.placeholder")} />
       <CommandList>
-        <CommandEmpty>No matching command.</CommandEmpty>
-        <CommandGroup heading="Actions">
+        <CommandEmpty>{t("skills.palette.empty")}</CommandEmpty>
+        <CommandGroup heading={t("skills.palette.heading")}>
           {actions.map((action) => (
             <CommandItem
               key={action.id}

@@ -1,36 +1,77 @@
-import { CheckCircle2, FileMinus, FilePen, FilePlus } from "lucide-react"
+import { CheckCircle2, FileMinus, FilePen, FilePlus, type LucideIcon } from "lucide-react"
+import { useTranslation } from "react-i18next"
+import type { ParseKeys } from "i18next"
 
+import { cn } from "@/lib/utils"
 import type { DiffStatus } from "@/lib/api"
 
 // Per-status presentation for file diffs (added/removed/modified/unchanged),
 // shared by the two-way (UpstreamDiffView) and three-way (ThreeWayMergeView)
-// viewers. Both grew identical Icon/label/colour switches; this is the single
-// source. `text` is the icon + badge-text colour; `bg` is the badge fill.
+// viewers. Triple-encoded (§13.8.7): a semantic state colour token, a Lucide
+// icon, and a localised label; the English term rides along as the tooltip.
+
+type StateName = "clean" | "danger" | "warn" | "muted"
+
 const DIFF_STATUS_META: Record<
   DiffStatus,
-  { label: string; text: string; bg: string; Icon: typeof FilePlus }
+  { state: StateName; sign: string; Icon: LucideIcon }
 > = {
-  added: { label: "+新增", text: "text-emerald-600", bg: "bg-emerald-500/15", Icon: FilePlus },
-  removed: { label: "−删除", text: "text-red-600", bg: "bg-red-500/15", Icon: FileMinus },
-  modified: { label: "~修改", text: "text-amber-600", bg: "bg-amber-500/15", Icon: FilePen },
-  unchanged: {
-    label: "未变更",
-    text: "text-muted-foreground",
-    bg: "bg-muted",
-    Icon: CheckCircle2,
-  },
+  added: { state: "clean", sign: "+", Icon: FilePlus },
+  removed: { state: "danger", sign: "−", Icon: FileMinus },
+  modified: { state: "warn", sign: "~", Icon: FilePen },
+  unchanged: { state: "muted", sign: "", Icon: CheckCircle2 },
+}
+
+function textClass(state: StateName): string {
+  switch (state) {
+    case "clean":
+      return "text-state-clean-600"
+    case "danger":
+      return "text-state-danger-600"
+    case "warn":
+      return "text-state-warn-600"
+    case "muted":
+      return "text-muted-foreground"
+  }
+}
+
+function badgeClass(state: StateName): string {
+  switch (state) {
+    case "clean":
+      return "bg-state-clean-50 text-state-clean-600 border-state-clean-500/30"
+    case "danger":
+      return "bg-state-danger-50 text-state-danger-600 border-state-danger-500/30"
+    case "warn":
+      return "bg-state-warn-50 text-state-warn-600 border-state-warn-500/30"
+    case "muted":
+      return "bg-state-muted-50 text-state-muted-600 border-state-muted-500/30"
+  }
 }
 
 export function DiffStatusIcon({ status }: { status: DiffStatus }) {
-  const { Icon, text } = DIFF_STATUS_META[status]
-  return <Icon className={`size-3.5 shrink-0 ${text}`} aria-hidden />
+  const { t } = useTranslation()
+  const { Icon, state } = DIFF_STATUS_META[status]
+  return (
+    <Icon
+      className={cn("size-3.5 shrink-0", textClass(state))}
+      aria-label={t(`status.tip.${status}` as ParseKeys)}
+    />
+  )
 }
 
 export function DiffStatusBadge({ status }: { status: DiffStatus }) {
-  const { label, text, bg } = DIFF_STATUS_META[status]
+  const { t } = useTranslation()
+  const { state, sign } = DIFF_STATUS_META[status]
   return (
-    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${bg} ${text}`}>
-      {label}
+    <span
+      title={t(`status.tip.${status}` as ParseKeys)}
+      className={cn(
+        "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium",
+        badgeClass(state)
+      )}
+    >
+      {sign}
+      {t(`status.diff.${status}` as ParseKeys)}
     </span>
   )
 }

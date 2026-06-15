@@ -289,6 +289,66 @@ export type UpdatesResponse = {
   summary: UpdatesSummary
 }
 
+// --- Dashboard (phase 12 t1, §13.8.2) ---
+
+// DashboardMetrics are the six headline counts the metric cards render, plus
+// pending_devices / untracked_skills which feed the action items.
+export type DashboardMetrics = {
+  online_devices: number
+  managed_skills: number
+  local_edits: number
+  upstream_updates: number
+  failed_deployments: number
+  high_risk_items: number
+  pending_devices: number
+  untracked_skills: number
+}
+
+// DashboardActionItem is one Top Action Items entry. key routes the UI to the
+// relevant page; label is the server's pre-localised fallback.
+export type DashboardActionItem = {
+  key: string
+  count: number
+  label: string
+}
+
+export type DashboardResponse = {
+  metrics: DashboardMetrics
+  action_items: DashboardActionItem[]
+}
+
+// --- Audit (phase 12 t1, §13.8.17) ---
+
+// AuditEntry is one audit_logs row. detail is the raw detail_json (any shape)
+// passed through verbatim; the UI renders it as read-only JSON.
+export type AuditEntry = {
+  id: string
+  actor_type: string
+  actor_id?: string
+  action: string
+  target_type?: string
+  target_id?: string
+  detail?: unknown
+  created_at: number
+}
+
+export type AuditResponse = {
+  entries: AuditEntry[]
+  next_cursor?: number
+}
+
+// AuditQuery narrows the audit list (all optional). action is a dotted-prefix
+// match; actor is the actor_type; since/until are ms epoch (until doubles as
+// the backward-paging cursor).
+export type AuditQuery = {
+  action?: string
+  actor?: string
+  target?: string
+  since?: number
+  until?: number
+  limit?: number
+}
+
 // --- Upstream diff (phase 6 t10, §17 task 6) ---
 
 export type DiffStatus = "added" | "removed" | "modified" | "unchanged"
@@ -783,6 +843,22 @@ export const api = {
 
   // Updates Page (§13.7): skills grouped by update dimension + summary.
   listUpdates: () => request<UpdatesResponse>("GET", "/api/updates"),
+
+  // Dashboard (§13.8.2): six headline metrics + Top Action Items.
+  dashboard: () => request<DashboardResponse>("GET", "/api/dashboard"),
+
+  // Audit (§13.8.17): filterable reverse-chronological timeline.
+  listAudit: (q?: AuditQuery) => {
+    const params = new URLSearchParams()
+    if (q?.action) params.set("action", q.action)
+    if (q?.actor) params.set("actor", q.actor)
+    if (q?.target) params.set("target", q.target)
+    if (q?.since) params.set("since", String(q.since))
+    if (q?.until) params.set("until", String(q.until))
+    if (q?.limit) params.set("limit", String(q.limit))
+    const qs = params.toString()
+    return request<AuditResponse>("GET", `/api/audit${qs ? `?${qs}` : ""}`)
+  },
 
   // Upstream diff (§17 task 6): two-way diff between a bound skill's baseline
   // and its pending upstream version.

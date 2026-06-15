@@ -115,12 +115,23 @@ func (d Deps) handleListUpdates(w http.ResponseWriter, r *http.Request) {
 	if !d.requireRegistryAndSources(w) {
 		return
 	}
-
-	srcs, err := d.Sources.ListAll(r.Context())
+	resp, err := d.aggregateUpdates(r)
 	if err != nil {
-		d.logErr("updates: list sources", err)
+		d.logErr("updates: aggregate", err)
 		writeError(w, http.StatusInternalServerError, "internal_error", "internal error")
 		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// aggregateUpdates builds the full §13.7 Updates payload (dimensions +
+// summary). Split out from handleListUpdates so the Dashboard endpoint can
+// reuse the exact same upstream/local algorithm without a second HTTP round
+// trip. The caller is responsible for the requireRegistryAndSources guard.
+func (d Deps) aggregateUpdates(r *http.Request) (updatesResponse, error) {
+	srcs, err := d.Sources.ListAll(r.Context())
+	if err != nil {
+		return updatesResponse{}, err
 	}
 
 	items := make([]updateItem, 0)
@@ -130,9 +141,7 @@ func (d Deps) handleListUpdates(w http.ResponseWriter, r *http.Request) {
 	for _, src := range srcs {
 		versions, err := d.Registry.ListByName(r.Context(), src.Name)
 		if err != nil {
-			d.logErr("updates: list versions for "+src.Name, err)
-			writeError(w, http.StatusInternalServerError, "internal_error", "internal error")
-			return
+			return updatesResponse{}, err
 		}
 		// Collect upstream-kind versions. ListByName is created_at DESC, so
 		// upstreams[0] is newest (the pending update) and the last is the
@@ -169,12 +178,10 @@ func (d Deps) handleListUpdates(w http.ResponseWriter, r *http.Request) {
 	// dimension.
 	localOnly, localAndUpstream, err := d.collectLocalEdits(r, upstreamNames)
 	if err != nil {
-		d.logErr("updates: collect local edits", err)
-		writeError(w, http.StatusInternalServerError, "internal_error", "internal error")
-		return
+		return updatesResponse{}, err
 	}
 
-	resp := updatesResponse{
+	return updatesResponse{
 		Dimensions: []updateDimension{
 			{Key: dimUpstreamUpdate, Label: "上游有更新", Pending: false, Items: items},
 			{Key: dimLocalEdit, Label: "本地有修改", Pending: false, Items: localOnly},
@@ -188,8 +195,7 @@ func (d Deps) handleListUpdates(w http.ResponseWriter, r *http.Request) {
 			LocalEdits:      len(localOnly) + len(localAndUpstream),
 			SourceUnknown:   0, // Phase 8 (device-inferred sources).
 		},
-	}
-	writeJSON(w, http.StatusOK, resp)
+	}, nil
 }
 
 // collectLocalEdits walks every device's drift and partitions the

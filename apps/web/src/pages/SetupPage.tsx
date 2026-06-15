@@ -1,4 +1,6 @@
 import { useState, type FormEvent } from "react"
+import { useTranslation } from "react-i18next"
+import { useNavigate } from "react-router-dom"
 import { Rocket, AlertCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -8,7 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 
 import { api, ApiError } from "@/lib/api"
-import { navigate } from "@/lib/router"
 
 // SetupPage is the one-time admin bootstrap. The operator pastes the
 // SF-SETUP-…-… code that the server printed to stderr on first boot.
@@ -16,6 +17,8 @@ import { navigate } from "@/lib/router"
 // auto-login because the setup response doesn't carry a session
 // cookie (POST /api/setup is intentionally narrower than /api/login).
 export function SetupPage({ onSetupComplete }: { onSetupComplete: () => void }) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
   const [code, setCode] = useState("")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
@@ -29,22 +32,22 @@ export function SetupPage({ onSetupComplete }: { onSetupComplete: () => void }) 
     try {
       await api.setup(code, username, password)
       onSetupComplete()
-      navigate("login")
+      navigate("/login")
     } catch (err) {
       if (err instanceof ApiError) {
         switch (err.code) {
           case "already_consumed":
           case "no_pending_setup":
-            setError("Setup is already complete. Please sign in.")
+            setError(t("setup.alreadyComplete"))
             break
           case "code_mismatch":
-            setError("Setup code does not match. Check the server log for a fresh code.")
+            setError(t("setup.codeMismatch"))
             break
           default:
             setError(err.message)
         }
       } else {
-        setError("Network error. Check the server and retry.")
+        setError(t("common.networkError"))
       }
     } finally {
       setPending(false)
@@ -57,21 +60,18 @@ export function SetupPage({ onSetupComplete }: { onSetupComplete: () => void }) 
         <CardHeader className="space-y-1">
           <CardTitle className="flex items-center gap-2 text-2xl">
             <Rocket className="text-primary size-5" aria-hidden />
-            Initial setup
+            {t("setup.title")}
           </CardTitle>
-          <CardDescription>
-            Paste the setup code from the server&apos;s stderr banner and choose your admin
-            credentials. This page is only available before the first admin is created.
-          </CardDescription>
+          <CardDescription>{t("setup.description")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4" noValidate>
             <div className="space-y-2">
-              <Label htmlFor="setup-code">Setup code</Label>
+              <Label htmlFor="setup-code">{t("setup.code")}</Label>
               <Input
                 id="setup-code"
                 name="code"
-                placeholder="SF-SETUP-XXXX-XXXX"
+                placeholder={t("setup.codePlaceholder")}
                 autoFocus
                 autoComplete="off"
                 spellCheck={false}
@@ -83,7 +83,7 @@ export function SetupPage({ onSetupComplete }: { onSetupComplete: () => void }) 
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="setup-username">Username</Label>
+              <Label htmlFor="setup-username">{t("auth.username")}</Label>
               <Input
                 id="setup-username"
                 name="username"
@@ -95,7 +95,7 @@ export function SetupPage({ onSetupComplete }: { onSetupComplete: () => void }) 
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="setup-password">Password</Label>
+              <Label htmlFor="setup-password">{t("auth.password")}</Label>
               <Input
                 id="setup-password"
                 name="password"
@@ -107,12 +107,12 @@ export function SetupPage({ onSetupComplete }: { onSetupComplete: () => void }) 
                 required
                 minLength={12}
               />
-              <p className="text-muted-foreground text-xs">At least 12 characters.</p>
+              <p className="text-muted-foreground text-xs">{t("setup.passwordHint")}</p>
             </div>
             {error && (
               <Alert variant="destructive">
                 <AlertCircle className="size-4" aria-hidden />
-                <AlertTitle>Setup failed</AlertTitle>
+                <AlertTitle>{t("setup.failed")}</AlertTitle>
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
@@ -121,7 +121,7 @@ export function SetupPage({ onSetupComplete }: { onSetupComplete: () => void }) 
               className="w-full"
               disabled={pending || !code || !username || password.length < 12}
             >
-              {pending ? "Creating admin…" : "Create admin"}
+              {pending ? t("setup.creatingAdmin") : t("setup.createAdmin")}
             </Button>
           </form>
         </CardContent>

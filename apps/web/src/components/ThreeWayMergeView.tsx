@@ -10,6 +10,7 @@ import {
   RefreshCw,
   SkipForward,
 } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -54,6 +55,7 @@ export function ThreeWayMergeView({
   onRefresh,
   isDark,
 }: ThreeWayMergeViewProps) {
+  const { t } = useTranslation()
   // No theme listener here (§5.5): prefer the prop; fall back to a one-shot
   // read of <html> so the editor still themes correctly when used standalone.
   const dark = isDark ?? document.documentElement.classList.contains("dark")
@@ -63,18 +65,18 @@ export function ThreeWayMergeView({
     return (
       <Alert variant="destructive">
         <AlertCircle className="size-4" aria-hidden />
-        <AlertTitle>加载差异失败</AlertTitle>
+        <AlertTitle>{t("updates.loadDiffFailed")}</AlertTitle>
         <AlertDescription>{error}</AlertDescription>
       </Alert>
     )
   }
 
   if (loading && !diff) {
-    return <p className="text-muted-foreground text-sm">加载差异中…</p>
+    return <p className="text-muted-foreground text-sm">{t("updates.loadingDiff")}</p>
   }
 
   if (!diff) {
-    return <p className="text-muted-foreground text-sm">尚未加载差异。</p>
+    return <p className="text-muted-foreground text-sm">{t("updates.diffNotLoaded")}</p>
   }
 
   if (!diff.has_remote_update) {
@@ -83,19 +85,19 @@ export function ThreeWayMergeView({
       <Card>
         <CardContent className="space-y-4 py-6">
           <div className="flex items-start gap-3">
-            <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600" aria-hidden />
+            <CheckCircle2 className="text-state-clean-600 mt-0.5 size-5 shrink-0" aria-hidden />
             <div className="space-y-1">
               {localChanged ? (
                 <>
-                  <p className="text-sm font-medium">本地有修改，但上游暂无更新</p>
+                  <p className="text-sm font-medium">{t("updates.localChangedNoUpstream")}</p>
                   <p className="text-muted-foreground text-sm">
-                    当前没有待处理的上游更新；待 Phase 8 支持设备上传本地内容后再做合并。
+                    {t("updates.localChangedNoUpstreamHint")}
                   </p>
                 </>
               ) : (
                 <>
-                  <p className="text-sm font-medium">当前没有待处理的上游更新</p>
-                  <p className="text-muted-foreground text-sm">绑定后用「检查更新」拉取上游变化。</p>
+                  <p className="text-sm font-medium">{t("updates.noPendingUpdate")}</p>
+                  <p className="text-muted-foreground text-sm">{t("updates.checkUpdatesHint")}</p>
                 </>
               )}
             </div>
@@ -116,16 +118,16 @@ export function ThreeWayMergeView({
       <CardHeader>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1">
-            <CardTitle className="text-lg">三方合并</CardTitle>
+            <CardTitle className="text-lg">{t("updates.threeWayTitle")}</CardTitle>
             <CardDescription className="flex flex-wrap items-center gap-2">
               <span className="text-muted-foreground font-mono text-xs">
                 base {shortId(diff.base_version_id)} → remote {shortId(diff.remote_version_id)}
               </span>
-              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
-                {files.length} 个变更文件
+              <span className="bg-state-warn-50 text-state-warn-600 rounded px-1.5 py-0.5 text-[10px] font-medium">
+                {t("updates.changedFiles", { n: files.length })}
               </span>
               <span className="text-muted-foreground rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium">
-                {diff.unchanged} 个未变更
+                {t("updates.unchangedCount", { n: diff.unchanged })}
               </span>
             </CardDescription>
           </div>
@@ -136,7 +138,7 @@ export function ThreeWayMergeView({
               ) : (
                 <RefreshCw className="size-4" aria-hidden />
               )}
-              刷新
+              {t("common.refresh")}
             </Button>
           ) : null}
         </div>
@@ -165,12 +167,13 @@ export function ThreeWayMergeView({
 // LocalSideSummary surfaces the device copy honestly: only a fingerprint and
 // its relationship to base/remote — no bytes (Phase 7), so no per-file diff.
 function LocalSideSummary({ local }: { local: LocalSide }) {
+  const { t } = useTranslation()
   return (
-    <section className="rounded-md border border-sky-500/30 bg-sky-500/5 p-3">
+    <section className="border-state-info-500/30 bg-state-info-50 rounded-md border p-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <span className="flex items-center gap-1.5 text-sm font-medium text-sky-600">
+        <span className="text-state-info-600 flex items-center gap-1.5 text-sm font-medium">
           <Laptop className="size-4" aria-hidden />
-          本地副本
+          {t("updates.localCopy")}
         </span>
         <span className="text-muted-foreground font-mono text-xs">
           {local.device_id} · {local.tool_key} · {local.scope}
@@ -187,11 +190,11 @@ function LocalSideSummary({ local }: { local: LocalSide }) {
         </span>
         <span className="text-muted-foreground flex items-center gap-1 font-mono">
           <Fingerprint className="size-3.5" aria-hidden />
-          {local.sha ? shortId(local.sha) : "无指纹"}
+          {local.sha ? shortId(local.sha) : t("updates.noFingerprint")}
         </span>
       </div>
       <p className="text-muted-foreground mt-2 text-xs">
-        本地内容需设备上传（Phase 8）：当前仅有内容指纹，无法逐文件展示本地差异。
+        {t("updates.localUploadHint")}
       </p>
     </section>
   )
@@ -208,15 +211,16 @@ function DiffFileList({
   choices: Record<string, MergeChoice>
   onSelect: (path: string) => void
 }) {
+  const { t } = useTranslation()
   return (
     <aside className="min-w-0 rounded-md border">
       <div className="border-b px-3 py-2">
         <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-          变更文件
+          {t("updates.files")}
         </h3>
       </div>
       {files.length === 0 ? (
-        <p className="text-muted-foreground p-3 text-sm">没有变更文件。</p>
+        <p className="text-muted-foreground p-3 text-sm">{t("updates.noChangedFiles")}</p>
       ) : (
         <ul className="max-h-[32rem] space-y-0.5 overflow-auto p-2">
           {files.map((file) => {
@@ -257,6 +261,7 @@ function SelectedDiffPanel({
   choice?: MergeChoice
   onChoose: (path: string, choice: MergeChoice) => void
 }) {
+  const { t } = useTranslation()
   return (
     <section className="min-w-0 rounded-md border">
       <div className="space-y-2 border-b px-3 py-2">
@@ -274,7 +279,7 @@ function SelectedDiffPanel({
             <MergeChoiceButtons path={selected.path} current={choice} onChoose={onChoose} />
           </>
         ) : (
-          <span className="text-muted-foreground text-sm">差异预览（base ↔ 上游）</span>
+          <span className="text-muted-foreground text-sm">{t("updates.diffPreviewBaseUpstream")}</span>
         )}
       </div>
       <div className="h-[28rem] md:h-[32rem]">
@@ -286,7 +291,7 @@ function SelectedDiffPanel({
               language={languageForPath(selected.path)}
               theme={isDark ? "vs-dark" : "vs"}
               height="100%"
-              loading={<span className="text-muted-foreground text-xs">加载 diff…</span>}
+              loading={<span className="text-muted-foreground text-xs">{t("updates.loadingDiffShort")}</span>}
               options={{
                 readOnly: true,
                 renderSideBySide: true,
@@ -302,7 +307,7 @@ function SelectedDiffPanel({
           )
         ) : (
           <div className="flex h-full items-center justify-center p-6">
-            <p className="text-muted-foreground text-sm">选择左侧文件查看 base ↔ 上游 差异</p>
+            <p className="text-muted-foreground text-sm">{t("updates.selectFileBaseUpstream")}</p>
           </div>
         )}
       </div>
@@ -321,9 +326,10 @@ function MergeChoiceButtons({
   current?: MergeChoice
   onChoose: (path: string, choice: MergeChoice) => void
 }) {
+  const { t } = useTranslation()
   const options: MergeChoice[] = ["local", "remote", "base"]
   return (
-    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="合并选择">
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t("updates.mergeChoiceLabel")}>
       {options.map((option) => {
         const meta = choiceMeta(option)
         const active = current === option
@@ -339,7 +345,7 @@ function MergeChoiceButtons({
             onClick={() => onChoose(path, option)}
           >
             <Icon className="size-3.5" aria-hidden />
-            {meta.label}
+            {t(meta.labelKey)}
           </Button>
         )
       })}
@@ -348,33 +354,35 @@ function MergeChoiceButtons({
 }
 
 function ChoiceDot({ choice }: { choice?: MergeChoice }) {
+  const { t } = useTranslation()
   if (!choice) {
     return null
   }
   const meta = choiceMeta(choice)
   return (
     <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium ${meta.dotClass}`}>
-      {meta.short}
+      {t(meta.shortKey)}
     </span>
   )
 }
 
 function BinaryDiffPlaceholder({ file }: { file: DiffFile }) {
+  const { t } = useTranslation()
   return (
     <div className="flex h-full items-center justify-center p-6">
       <div className="max-w-sm rounded-md border bg-muted/30 px-4 py-4 text-center">
         <AlertCircle className="text-muted-foreground mx-auto size-5" aria-hidden />
-        <p className="mt-2 text-sm font-medium">二进制或超大文件，无法显示行级差异</p>
+        <p className="mt-2 text-sm font-medium">{t("updates.binaryTooLarge")}</p>
         <dl className="mt-3 grid grid-cols-[5rem_1fr] gap-x-3 gap-y-1 text-left text-xs">
           <dt className="text-muted-foreground">base</dt>
           <dd className="font-mono">
-            {file.base_present ? formatBytes(file.base_size) : `不存在 · ${formatBytes(file.base_size)}`}
+            {file.base_present ? formatBytes(file.base_size) : `${t("updates.notExist")} · ${formatBytes(file.base_size)}`}
           </dd>
           <dt className="text-muted-foreground">remote</dt>
           <dd className="font-mono">
             {file.target_present
               ? formatBytes(file.target_size)
-              : `不存在 · ${formatBytes(file.target_size)}`}
+              : `${t("updates.notExist")} · ${formatBytes(file.target_size)}`}
           </dd>
         </dl>
       </div>
@@ -383,19 +391,20 @@ function BinaryDiffPlaceholder({ file }: { file: DiffFile }) {
 }
 
 function SHACompareBadge({ value }: { value: SHACompare }) {
+  const { t } = useTranslation()
   let label: string
   let colour: string
   switch (value) {
     case "same":
-      label = "一致"
-      colour = "bg-emerald-500/15 text-emerald-600"
+      label = t("updates.shaCompare.same")
+      colour = "bg-state-clean-50 text-state-clean-600"
       break
     case "different":
-      label = "不同"
-      colour = "bg-amber-500/15 text-amber-600"
+      label = t("updates.shaCompare.different")
+      colour = "bg-state-warn-50 text-state-warn-600"
       break
     case "unknown":
-      label = "未知"
+      label = t("updates.shaCompare.unknown")
       colour = "bg-muted text-muted-foreground"
       break
   }
@@ -407,8 +416,8 @@ function SHACompareBadge({ value }: { value: SHACompare }) {
 }
 
 function choiceMeta(choice: MergeChoice): {
-  label: string
-  short: string
+  labelKey: "updates.choice.local.label" | "updates.choice.remote.label" | "updates.choice.base.label"
+  shortKey: "updates.choice.local.short" | "updates.choice.remote.short" | "updates.choice.base.short"
   Icon: typeof Laptop
   activeClass: string
   dotClass: string
@@ -416,24 +425,24 @@ function choiceMeta(choice: MergeChoice): {
   switch (choice) {
     case "local":
       return {
-        label: "采用本地",
-        short: "本地",
+        labelKey: "updates.choice.local.label",
+        shortKey: "updates.choice.local.short",
         Icon: Laptop,
-        activeClass: "border-sky-500 bg-sky-500/10 text-sky-600 hover:bg-sky-500/15",
-        dotClass: "bg-sky-500/15 text-sky-600",
+        activeClass: "border-state-info-500 bg-state-info-50 text-state-info-600 hover:bg-state-info-50",
+        dotClass: "bg-state-info-50 text-state-info-600",
       }
     case "remote":
       return {
-        label: "采用上游",
-        short: "上游",
+        labelKey: "updates.choice.remote.label",
+        shortKey: "updates.choice.remote.short",
         Icon: CloudDownload,
-        activeClass: "border-emerald-500 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15",
-        dotClass: "bg-emerald-500/15 text-emerald-600",
+        activeClass: "border-state-clean-500 bg-state-clean-50 text-state-clean-600 hover:bg-state-clean-50",
+        dotClass: "bg-state-clean-50 text-state-clean-600",
       }
     case "base":
       return {
-        label: "跳过(保持base)",
-        short: "保持",
+        labelKey: "updates.choice.base.label",
+        shortKey: "updates.choice.base.short",
         Icon: SkipForward,
         activeClass: "border-muted-foreground/40 bg-muted text-foreground hover:bg-muted",
         dotClass: "bg-muted text-muted-foreground",

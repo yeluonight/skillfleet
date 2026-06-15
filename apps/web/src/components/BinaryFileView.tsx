@@ -1,4 +1,5 @@
 import { Download, FileWarning, Image as ImageIcon } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import type { DraftFile } from "@/lib/api"
@@ -49,6 +50,7 @@ export interface BinaryFileViewProps {
  * lives in the draft (SVG is UTF-8 text), so no extra fetch is needed.
  */
 export function BinaryFileView({ file, onDownload, imageSrc }: BinaryFileViewProps) {
+  const { t } = useTranslation()
   const ext = extOf(file.path)
   const isSvg = ext === "svg"
   const isBitmap = BITMAP_EXTS.has(ext)
@@ -76,16 +78,18 @@ export function BinaryFileView({ file, onDownload, imageSrc }: BinaryFileViewPro
         </div>
       ) : (isBitmap || isSvg) && tooLargeForPreview ? (
         <p className="text-muted-foreground text-xs">
-          Image is {humanSize(file.size)} (over the {humanSize(MAX_IMAGE_PREVIEW_BYTES)} preview
-          limit). Download to view.
+          {t("skills.binary.imageOverLimit", {
+            size: humanSize(file.size),
+            limit: humanSize(MAX_IMAGE_PREVIEW_BYTES),
+          })}
         </p>
       ) : isBitmap ? (
         <p className="text-muted-foreground text-xs">
-          No inline preview available for this image (download to view, or re-upload to preview).
+          {t("skills.binary.noInlinePreview")}
         </p>
       ) : (
         <p className="text-muted-foreground text-xs">
-          This file can&apos;t be edited inline. Download it, or replace it via upload.
+          {t("skills.binary.notEditable")}
         </p>
       )}
     </div>
@@ -101,6 +105,7 @@ function MetaCard({
   ext: string
   onDownload: () => void
 }) {
+  const { t } = useTranslation()
   const isImage = ext === "svg" || BITMAP_EXTS.has(ext)
   return (
     <div className="border-border space-y-2 rounded-md border p-3">
@@ -115,13 +120,15 @@ function MetaCard({
         </span>
       </div>
       <dl className="text-muted-foreground grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px]">
-        <dt>Size</dt>
+        <dt>{t("skills.binary.size")}</dt>
         <dd className="font-mono">{humanSize(file.size)}</dd>
-        <dt>Encoding</dt>
-        <dd className="font-mono">{file.encoding ?? (file.is_binary ? "binary" : "—")}</dd>
+        <dt>{t("skills.binary.encoding")}</dt>
+        <dd className="font-mono">
+          {file.encoding ?? (file.is_binary ? t("skills.binary.binaryEncoding") : "—")}
+        </dd>
         {file.sha256 ? (
           <>
-            <dt>SHA-256</dt>
+            <dt>{t("skills.binary.sha256")}</dt>
             <dd className="truncate font-mono" title={file.sha256}>
               {file.sha256.slice(0, 16)}…
             </dd>
@@ -130,7 +137,7 @@ function MetaCard({
       </dl>
       <Button size="sm" variant="secondary" onClick={onDownload}>
         <Download className="size-3.5" aria-hidden />
-        Download
+        {t("skills.binary.download")}
       </Button>
     </div>
   )

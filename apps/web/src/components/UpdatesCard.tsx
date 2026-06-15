@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react"
+import { useTranslation } from "react-i18next"
 import {
   AlertCircle,
   ArrowUpCircle,
@@ -28,6 +29,7 @@ export type UpdatesCardProps = {
 // UpdatesCard is a pure controlled surface for the Updates Page. Parents own
 // API calls, CSRF, refresh state, errors, and any navigation on skill select.
 export function UpdatesCard({ data, error, busy, onRefresh, onSelectSkill }: UpdatesCardProps) {
+  const { t } = useTranslation()
   const [renderedAt] = useState(() => Date.now())
 
   return (
@@ -37,9 +39,9 @@ export function UpdatesCard({ data, error, busy, onRefresh, onSelectSkill }: Upd
           <div className="space-y-1">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Package className="text-primary size-5" aria-hidden />
-              更新
+              {t("updates.title")}
             </CardTitle>
-            <CardDescription>按维度查看需要关注的 Skill 更新状态。</CardDescription>
+            <CardDescription>{t("updates.desc")}</CardDescription>
           </div>
           <Button type="button" size="sm" variant="ghost" onClick={onRefresh} disabled={busy}>
             {busy ? (
@@ -47,7 +49,7 @@ export function UpdatesCard({ data, error, busy, onRefresh, onSelectSkill }: Upd
             ) : (
               <RefreshCw className="size-4" aria-hidden />
             )}
-            刷新
+            {t("common.refresh")}
           </Button>
         </div>
       </CardHeader>
@@ -55,7 +57,7 @@ export function UpdatesCard({ data, error, busy, onRefresh, onSelectSkill }: Upd
         {error ? (
           <Alert variant="destructive">
             <AlertCircle className="size-4" aria-hidden />
-            <AlertTitle>加载失败</AlertTitle>
+            <AlertTitle>{t("updates.loadFailed")}</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
@@ -70,7 +72,7 @@ export function UpdatesCard({ data, error, busy, onRefresh, onSelectSkill }: Upd
             />
           </>
         ) : !error ? (
-          <p className="text-muted-foreground text-sm">加载中…</p>
+          <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
         ) : null}
       </CardContent>
     </Card>
@@ -78,25 +80,26 @@ export function UpdatesCard({ data, error, busy, onRefresh, onSelectSkill }: Upd
 }
 
 function SummaryCards({ summary }: { summary: UpdatesSummary }) {
+  const { t } = useTranslation()
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       <SummaryCard
-        label="上游可更新"
+        label={t("updates.summaryUpstream")}
         value={summary.upstream_updates}
         icon={<ArrowUpCircle className="size-5" aria-hidden />}
-        emphasis={summary.upstream_updates > 0 ? "amber" : "muted"}
+        emphasis={summary.upstream_updates > 0 ? "warn" : "muted"}
       />
       <SummaryCard
-        label="本地有修改"
+        label={t("updates.summaryLocalEdits")}
         value={summary.local_edits}
         icon={<Laptop className="size-5" aria-hidden />}
-        emphasis={summary.local_edits > 0 ? "sky" : "muted"}
+        emphasis={summary.local_edits > 0 ? "info" : "muted"}
       />
       <SummaryCard
-        label="来源未知"
+        label={t("updates.summarySourceUnknown")}
         value={summary.source_unknown}
         icon={<AlertCircle className="size-5" aria-hidden />}
-        emphasis={summary.source_unknown > 0 ? "red" : "muted"}
+        emphasis={summary.source_unknown > 0 ? "danger" : "muted"}
       />
     </div>
   )
@@ -111,15 +114,15 @@ function SummaryCard({
   label: string
   value: number
   icon: ReactNode
-  emphasis: "amber" | "muted" | "red" | "sky"
+  emphasis: "warn" | "muted" | "danger" | "info"
 }) {
   const colour =
-    emphasis === "amber"
-      ? "text-amber-600"
-      : emphasis === "red"
-        ? "text-red-600"
-        : emphasis === "sky"
-          ? "text-sky-600"
+    emphasis === "warn"
+      ? "text-state-warn-600"
+      : emphasis === "danger"
+        ? "text-state-danger-600"
+        : emphasis === "info"
+          ? "text-state-info-600"
           : "text-muted-foreground"
 
   return (
@@ -165,13 +168,14 @@ function DimensionSection({
   renderedAt: number
   onSelectSkill?: (name: string) => void
 }) {
+  const { t } = useTranslation()
   if (dimension.pending) {
     return (
       <section className="rounded-md border border-dashed bg-muted/30 px-3 py-3">
         <DimensionHeader dimension={dimension} muted />
         <div className="text-muted-foreground mt-2 flex items-center gap-2 text-sm">
           <Clock className="size-4 shrink-0" aria-hidden />
-          <span>此维度将在后续阶段提供数据。</span>
+          <span>{t("updates.dimensionPending")}</span>
         </div>
       </section>
     )
@@ -182,8 +186,8 @@ function DimensionSection({
       <DimensionHeader dimension={dimension} />
       {dimension.items.length === 0 ? (
         <div className="text-muted-foreground mt-3 flex items-center gap-2 text-sm">
-          <CheckCircle2 className="size-4 shrink-0 text-emerald-600" aria-hidden />
-          <span>没有需要关注的项目</span>
+          <CheckCircle2 className="text-state-clean-600 size-4 shrink-0" aria-hidden />
+          <span>{t("updates.noItems")}</span>
         </div>
       ) : (
         <ul className="divide-border mt-3 divide-y rounded-md border">
@@ -212,6 +216,7 @@ function itemKey(item: UpdateItem): string {
 }
 
 function DimensionHeader({ dimension, muted = false }: { dimension: UpdateDimension; muted?: boolean }) {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-wrap items-center gap-2">
       <h3 className={`text-sm font-medium ${muted ? "text-muted-foreground" : ""}`}>
@@ -221,8 +226,8 @@ function DimensionHeader({ dimension, muted = false }: { dimension: UpdateDimens
         {dimension.items.length}
       </span>
       {dimension.pending ? (
-        <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
-          即将支持
+        <span className="bg-state-warn-50 text-state-warn-600 rounded px-1.5 py-0.5 text-[10px] font-medium">
+          {t("updates.comingSoon")}
         </span>
       ) : null}
     </div>
@@ -238,6 +243,7 @@ function UpdateItemRow({
   renderedAt: number
   onSelectSkill?: (name: string) => void
 }) {
+  const { t } = useTranslation()
   // A local-edit item carries device provenance instead of a pending upstream
   // version; render the two shapes differently so each shows what it has.
   const isLocal = !!item.device_id
@@ -256,12 +262,12 @@ function UpdateItemRow({
             </button>
             {item.url ? <UpdateLink url={item.url} /> : null}
             {isLocal ? (
-              <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-600">
-                本地修改
+              <span className="bg-state-info-50 text-state-info-600 rounded px-1.5 py-0.5 text-[10px] font-medium">
+                {t("updates.itemLocalEdit")}
               </span>
             ) : (
-              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
-                有更新
+              <span className="bg-state-warn-50 text-state-warn-600 rounded px-1.5 py-0.5 text-[10px] font-medium">
+                {t("updates.itemHasUpdate")}
               </span>
             )}
           </div>
@@ -278,12 +284,12 @@ function UpdateItemRow({
         </div>
         <div className="text-muted-foreground flex shrink-0 flex-wrap items-center gap-2 text-xs sm:justify-end">
           {isLocal ? (
-            <span className="font-mono">{(item.local_sha ?? "").slice(0, 12) || "无指纹"}</span>
+            <span className="font-mono">{(item.local_sha ?? "").slice(0, 12) || t("updates.noFingerprint")}</span>
           ) : (
             <>
               <span className="font-mono">{(item.pending_content_sha256 ?? "").slice(0, 12)}</span>
               <span>·</span>
-              <span>{formatRelativeTime(item.pending_created_at, renderedAt, "未知时间")}</span>
+              <span>{formatRelativeTime(item.pending_created_at, renderedAt, t("updates.unknownTime"))}</span>
             </>
           )}
         </div>
@@ -293,13 +299,14 @@ function UpdateItemRow({
 }
 
 function UpdateLink({ url }: { url: string }) {
+  const { t } = useTranslation()
   return (
     <a
       href={url}
       target="_blank"
       rel="noreferrer"
       className="text-muted-foreground hover:text-primary inline-flex items-center"
-      aria-label="打开来源链接"
+      aria-label={t("updates.openSourceLink")}
       onClick={(event) => event.stopPropagation()}
     >
       <ExternalLink className="size-3.5" aria-hidden />

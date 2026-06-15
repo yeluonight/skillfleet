@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react"
 import { AlertCircle, Check, ChevronRight, Eye, GitBranch, Loader2 } from "lucide-react"
+import { useTranslation } from "react-i18next"
+import type { ParseKeys, TFunction } from "i18next"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -32,10 +34,22 @@ type Step = 1 | 2 | 3
 type SourceType = "github_repo" | "git_repo" | "github_release"
 type RefType = "branch" | "tag" | "commit" | "release"
 
-const SOURCE_TYPES: { value: SourceType; label: string; help: string }[] = [
-  { value: "github_repo", label: "GitHub 仓库", help: "从 GitHub 仓库导入 Skill" },
-  { value: "git_repo", label: "Git 仓库", help: "从通用 Git URL 导入" },
-  { value: "github_release", label: "GitHub Release", help: "从 Release 归档导入" },
+const SOURCE_TYPES: { value: SourceType; labelKey: ParseKeys; helpKey: ParseKeys }[] = [
+  {
+    value: "github_repo",
+    labelKey: "sources.wizard.sourceTypeGithubRepo",
+    helpKey: "sources.wizard.sourceTypeGithubRepoHelp",
+  },
+  {
+    value: "git_repo",
+    labelKey: "sources.wizard.sourceTypeGitRepo",
+    helpKey: "sources.wizard.sourceTypeGitRepoHelp",
+  },
+  {
+    value: "github_release",
+    labelKey: "sources.wizard.sourceTypeGithubRelease",
+    helpKey: "sources.wizard.sourceTypeGithubReleaseHelp",
+  },
 ]
 
 const REF_TYPES: { value: RefType; label: string }[] = [
@@ -57,6 +71,7 @@ export function BindWizard({
   previewError,
   busy,
 }: BindWizardProps) {
+  const { t } = useTranslation()
   const [manualStep, setManualStep] = useState<ManualStep>(1)
   const [sourceType, setSourceType] = useState<SourceType>("github_repo")
   const [url, setUrl] = useState("")
@@ -95,7 +110,7 @@ export function BindWizard({
 
   function requestPreview() {
     if (!url.trim()) {
-      setLocalError("请填写来源 URL。")
+      setLocalError(t("sources.wizard.urlRequired"))
       return
     }
     setLocalError(null)
@@ -104,7 +119,7 @@ export function BindWizard({
 
   function confirmBind() {
     if (!url.trim()) {
-      setLocalError("请填写来源 URL。")
+      setLocalError(t("sources.wizard.urlRequired"))
       return
     }
     setLocalError(null)
@@ -117,9 +132,9 @@ export function BindWizard({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <GitBranch className="text-primary size-5" aria-hidden />
-            绑定来源
+            {t("sources.wizard.title")}
           </DialogTitle>
-          <DialogDescription>选择来源、填写定位信息，拉取预览后再确认绑定。</DialogDescription>
+          <DialogDescription>{t("sources.wizard.desc")}</DialogDescription>
         </DialogHeader>
 
         <StepIndicator step={step} />
@@ -168,13 +183,14 @@ export function BindWizard({
 }
 
 function StepIndicator({ step }: { step: Step }) {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-      <StepPill active={step === 1}>1 选类型</StepPill>
+      <StepPill active={step === 1}>{t("sources.wizard.step1")}</StepPill>
       <ChevronRight className="size-3.5" aria-hidden />
-      <StepPill active={step === 2}>2 填信息</StepPill>
+      <StepPill active={step === 2}>{t("sources.wizard.step2")}</StepPill>
       <ChevronRight className="size-3.5" aria-hidden />
-      <StepPill active={step === 3}>3 确认预览</StepPill>
+      <StepPill active={step === 3}>{t("sources.wizard.step3")}</StepPill>
     </div>
   )
 }
@@ -203,6 +219,7 @@ function SourceTypeStep({
   onChange: (value: SourceType) => void
   onNext: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-3">
@@ -220,15 +237,15 @@ function SourceTypeStep({
               }
               aria-pressed={selected}
             >
-              <span className="block text-sm font-medium">{item.label}</span>
-              <span className="text-muted-foreground mt-1 block text-xs">{item.help}</span>
+              <span className="block text-sm font-medium">{t(item.labelKey)}</span>
+              <span className="text-muted-foreground mt-1 block text-xs">{t(item.helpKey)}</span>
             </button>
           )
         })}
       </div>
       <DialogFooter>
         <Button type="button" size="sm" onClick={onNext} disabled={busy}>
-          下一步
+          {t("sources.wizard.next")}
         </Button>
       </DialogFooter>
     </div>
@@ -278,10 +295,11 @@ function SourceFormStep({
   onBack: () => void
   onPreview: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="space-y-4">
       <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        当前类型：<span className="font-medium text-foreground">{sourceTypeLabel(sourceType)}</span>
+        {t("sources.wizard.currentType")}<span className="font-medium text-foreground">{sourceTypeLabel(t, sourceType)}</span>
       </div>
 
       <div className="space-y-2">
@@ -294,7 +312,7 @@ function SourceFormStep({
           disabled={busy}
           aria-invalid={Boolean(localError)}
         />
-        {localError ? <p className="text-xs text-red-600">{localError}</p> : null}
+        {localError ? <p className="text-state-danger-600 text-xs">{localError}</p> : null}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-[10rem_1fr]">
@@ -323,7 +341,7 @@ function SourceFormStep({
             placeholder="main"
             disabled={busy}
           />
-          <p className="text-muted-foreground text-xs">branch 可留空，表示默认分支。</p>
+          <p className="text-muted-foreground text-xs">{t("sources.wizard.refNameHint")}</p>
         </div>
       </div>
 
@@ -336,12 +354,12 @@ function SourceFormStep({
           placeholder="path/to/skill"
           disabled={busy}
         />
-        <p className="text-muted-foreground text-xs">可留空，表示仓库根目录。</p>
+        <p className="text-muted-foreground text-xs">{t("sources.wizard.subdirHint")}</p>
       </div>
 
       <div className="space-y-2 rounded-md border border-border p-3">
         <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
-          可选 GitHub 坐标
+          {t("sources.wizard.optionalGithub")}
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-2">
@@ -380,18 +398,18 @@ function SourceFormStep({
       {previewError ? (
         <Alert variant="destructive">
           <AlertCircle className="size-4" aria-hidden />
-          <AlertTitle>预览失败</AlertTitle>
+          <AlertTitle>{t("sources.wizard.previewErrorTitle")}</AlertTitle>
           <AlertDescription>{previewError}</AlertDescription>
         </Alert>
       ) : null}
 
       <DialogFooter>
         <Button type="button" variant="ghost" size="sm" onClick={onBack} disabled={busy}>
-          上一步
+          {t("sources.wizard.back")}
         </Button>
         <Button type="button" size="sm" onClick={onPreview} disabled={busy || !url.trim()}>
           {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Eye className="size-4" aria-hidden />}
-          拉取预览
+          {t("sources.wizard.fetchPreview")}
         </Button>
       </DialogFooter>
     </div>
@@ -409,6 +427,7 @@ function PreviewStep({
   onBack: () => void
   onConfirm: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="space-y-4">
       <div className="rounded-md border border-border p-3">
@@ -416,33 +435,33 @@ function PreviewStep({
           <div className="min-w-0 space-y-1">
             <div className="flex items-center gap-2">
               {preview.has_skill_md ? (
-                <Check className="size-4 text-emerald-600" aria-hidden />
+                <Check className="text-state-clean-600 size-4" aria-hidden />
               ) : (
-                <AlertCircle className="size-4 text-amber-600" aria-hidden />
+                <AlertCircle className="text-state-warn-600 size-4" aria-hidden />
               )}
-              <h3 className="text-sm font-medium">{preview.name || "未命名 Skill"}</h3>
+              <h3 className="text-sm font-medium">{preview.name || t("sources.wizard.unnamedSkill")}</h3>
             </div>
             {preview.description ? (
               <p className="text-muted-foreground text-sm">{preview.description}</p>
             ) : (
-              <p className="text-muted-foreground text-sm">没有 description。</p>
+              <p className="text-muted-foreground text-sm">{t("sources.wizard.noDescription")}</p>
             )}
           </div>
           <span
             className={
-              "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium " +
+              "shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium " +
               (preview.has_skill_md
-                ? "bg-emerald-500/15 text-emerald-600"
-                : "bg-amber-500/15 text-amber-600")
+                ? "bg-state-clean-50 text-state-clean-600 border-state-clean-500/30"
+                : "bg-state-warn-50 text-state-warn-600 border-state-warn-500/30")
             }
           >
-            {preview.has_skill_md ? "SKILL.md" : "缺少 SKILL.md"}
+            {preview.has_skill_md ? "SKILL.md" : t("sources.wizard.missingSkillMd")}
           </span>
         </div>
 
         {!preview.has_skill_md ? (
-          <div className="mt-3 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-sm text-amber-700">
-            未找到 SKILL.md。请返回修改 subdir 或来源定位信息。
+          <div className="bg-state-warn-50 text-state-warn-600 border-state-warn-500/30 mt-3 rounded-md border px-2.5 py-2 text-sm">
+            {t("sources.wizard.missingSkillMdWarn")}
           </div>
         ) : null}
 
@@ -456,13 +475,13 @@ function PreviewStep({
       </div>
 
       <div className="space-y-2">
-        <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">文件树</div>
+        <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">{t("sources.wizard.fileTree")}</div>
         <FileTree files={preview.files} />
       </div>
 
       {preview.warnings && preview.warnings.length > 0 ? (
-        <div className="space-y-1 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-sm text-amber-700">
-          <div className="font-medium">预览警告</div>
+        <div className="bg-state-warn-50 text-state-warn-600 border-state-warn-500/30 space-y-1 rounded-md border px-2.5 py-2 text-sm">
+          <div className="font-medium">{t("sources.wizard.previewWarnings")}</div>
           <ul className="list-disc space-y-1 pl-4">
             {preview.warnings.map((warning, index) => (
               <li key={`${warning}-${index}`}>{warning}</li>
@@ -473,11 +492,11 @@ function PreviewStep({
 
       <DialogFooter>
         <Button type="button" variant="ghost" size="sm" onClick={onBack} disabled={busy}>
-          返回修改
+          {t("sources.wizard.backToEdit")}
         </Button>
         <Button type="button" size="sm" onClick={onConfirm} disabled={busy}>
           {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-          确认绑定
+          {t("sources.wizard.confirmBind")}
         </Button>
       </DialogFooter>
     </div>
@@ -494,8 +513,9 @@ function PreviewInfo({ label, children }: { label: string; children: ReactNode }
 }
 
 function FileTree({ files }: { files: BindPreviewFile[] }) {
+  const { t } = useTranslation()
   if (files.length === 0) {
-    return <p className="text-muted-foreground text-sm">预览中没有文件。</p>
+    return <p className="text-muted-foreground text-sm">{t("sources.wizard.noFiles")}</p>
   }
 
   return (
@@ -514,6 +534,7 @@ function FileTree({ files }: { files: BindPreviewFile[] }) {
   )
 }
 
-function sourceTypeLabel(sourceType: SourceType): string {
-  return SOURCE_TYPES.find((item) => item.value === sourceType)?.label ?? sourceType
+function sourceTypeLabel(t: TFunction, sourceType: SourceType): string {
+  const item = SOURCE_TYPES.find((item) => item.value === sourceType)
+  return item ? t(item.labelKey) : sourceType
 }

@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react"
 import { AlertCircle, Check, ExternalLink, GitBranch, GitCompare, RefreshCw, Unlink } from "lucide-react"
+import { useTranslation } from "react-i18next"
+import type { TFunction } from "i18next"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -34,6 +36,7 @@ export function SourceTab({
   onDetach,
   onViewDiff,
 }: SourceTabProps) {
+  const { t } = useTranslation()
   const [renderedAt] = useState(() => Date.now())
 
   if (sourceState === "unbound") {
@@ -42,16 +45,16 @@ export function SourceTab({
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <GitBranch className="text-primary size-5" aria-hidden />
-            来源绑定
+            {t("sources.bindingTitle")}
           </CardTitle>
           <CardDescription>
-            未绑定来源。绑定 GitHub 或 Git 仓库后，可在这里检查上游更新。
+            {t("sources.unboundDesc")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Button type="button" size="sm" onClick={onBind} disabled={busy}>
             <GitBranch className="size-4" aria-hidden />
-            绑定来源
+            {t("sources.bindSource")}
           </Button>
         </CardContent>
       </Card>
@@ -62,14 +65,14 @@ export function SourceTab({
     return (
       <Alert variant="destructive">
         <AlertCircle className="size-4" aria-hidden />
-        <AlertTitle>来源信息缺失</AlertTitle>
-        <AlertDescription>当前 Skill 标记为已绑定，但没有可展示的来源详情。</AlertDescription>
+        <AlertTitle>{t("sources.missingTitle")}</AlertTitle>
+        <AlertDescription>{t("sources.missingDesc")}</AlertDescription>
       </Alert>
     )
   }
 
   const checkedAt = lastCheckedAt ?? source.last_checked_at
-  const refLabel = formatRef(source.ref_type, source.ref_name)
+  const refLabel = formatRef(t, source.ref_type, source.ref_name)
 
   return (
     <Card>
@@ -77,11 +80,11 @@ export function SourceTab({
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <GitBranch className="text-primary size-5" aria-hidden />
-            来源绑定
+            {t("sources.bindingTitle")}
           </CardTitle>
           <SourceStateBadge state={sourceState} />
         </div>
-        <CardDescription>此 Skill 已绑定上游来源；更新检查由父组件负责接线。</CardDescription>
+        <CardDescription>{t("sources.boundDesc")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <dl className="grid gap-2 text-sm sm:grid-cols-[9rem_1fr]">
@@ -93,24 +96,24 @@ export function SourceTab({
           {source.repo ? <InfoRow label="repo">{source.repo}</InfoRow> : null}
           {refLabel ? <InfoRow label="ref">{refLabel}</InfoRow> : null}
           <InfoRow label="subdir">
-            {source.subdir ? <span className="font-mono text-xs">{source.subdir}</span> : "仓库根"}
+            {source.subdir ? <span className="font-mono text-xs">{source.subdir}</span> : t("sources.repoRoot")}
           </InfoRow>
           {source.last_remote_commit ? (
             <InfoRow label="last_remote_commit">
               <span className="font-mono text-xs">{source.last_remote_commit.slice(0, 12)}</span>
             </InfoRow>
           ) : null}
-          <InfoRow label="last_checked_at">{formatRelativeTime(checkedAt, renderedAt, "从未")}</InfoRow>
+          <InfoRow label="last_checked_at">{formatRelativeTime(checkedAt, renderedAt, t("sources.never"))}</InfoRow>
         </dl>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" size="sm" onClick={onCheckUpdates} disabled={busy}>
             <RefreshCw className="size-4" aria-hidden />
-            检查更新
+            {t("sources.checkUpdates")}
           </Button>
           <Button type="button" size="sm" variant="ghost" onClick={onDetach} disabled={busy}>
             <Unlink className="size-4" aria-hidden />
-            解绑
+            {t("sources.detach")}
           </Button>
         </div>
 
@@ -121,9 +124,10 @@ export function SourceTab({
 }
 
 function SourceStateBadge({ state }: { state: SourceState }) {
+  const { t } = useTranslation()
   return (
-    <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-600">
-      {state}
+    <span className="bg-state-clean-50 text-state-clean-600 border-state-clean-500/30 shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium">
+      {t(`sources.state.${state}`)}
     </span>
   )
 }
@@ -161,33 +165,36 @@ function CheckResultBanner({
   result: { upstreamState: UpstreamState; pendingVersionId?: string; error?: string }
   onViewDiff?: () => void
 }) {
+  const { t } = useTranslation()
   if (result.upstreamState === "up_to_date") {
     return (
-      <div className="flex items-start gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-2 text-sm text-emerald-700">
+      <div className="bg-state-clean-50 text-state-clean-600 border-state-clean-500/30 flex items-start gap-2 rounded-md border px-2.5 py-2 text-sm">
         <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
-        <span>已是最新</span>
+        <span>{t("sources.upToDate")}</span>
       </div>
     )
   }
 
   if (result.upstreamState === "update_available") {
     return (
-      <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-sm text-amber-700">
+      <div className="bg-state-warn-50 text-state-warn-600 border-state-warn-500/30 flex flex-wrap items-center gap-2 rounded-md border px-2.5 py-2 text-sm">
         <AlertCircle className="size-4 shrink-0" aria-hidden />
         <span className="flex-1">
-          有可用更新
-          {result.pendingVersionId ? `（待审版本 ${result.pendingVersionId.slice(0, 8)}）` : ""}
+          {t("sources.updateAvailable")}
+          {result.pendingVersionId
+            ? t("sources.pendingVersion", { id: result.pendingVersionId.slice(0, 8) })
+            : ""}
         </span>
         {onViewDiff ? (
           <Button
             type="button"
             size="sm"
             variant="ghost"
-            className="h-7 text-amber-700 hover:text-amber-800"
+            className="text-state-warn-600 h-7"
             onClick={onViewDiff}
           >
             <GitCompare className="size-3.5" aria-hidden />
-            查看差异
+            {t("sources.viewDiff")}
           </Button>
         ) : null}
       </div>
@@ -198,22 +205,22 @@ function CheckResultBanner({
     return (
       <div className="text-muted-foreground flex items-start gap-2 rounded-md border border-border bg-muted/50 px-2.5 py-2 text-sm">
         <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
-        <span>远端有提交，但 Skill 内容未变；这不是更新。</span>
+        <span>{t("sources.remoteChangedNoSkillChange")}</span>
       </div>
     )
   }
 
   return (
-    <div className="flex items-start gap-2 rounded-md border border-red-500/20 bg-red-500/10 px-2.5 py-2 text-sm text-red-700">
+    <div className="bg-state-danger-50 text-state-danger-600 border-state-danger-500/30 flex items-start gap-2 rounded-md border px-2.5 py-2 text-sm">
       <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-      <span>检查失败{result.error ? `：${result.error}` : ""}</span>
+      <span>{result.error ? t("sources.checkFailedWithError", { error: result.error }) : t("sources.checkFailed")}</span>
     </div>
   )
 }
 
-function formatRef(refType?: string, refName?: string): string | null {
+function formatRef(t: TFunction, refType?: string, refName?: string): string | null {
   if (!refType && !refName) return null
   const kind = refType || "ref"
-  const name = refName || (kind === "branch" ? "默认分支" : "未指定")
+  const name = refName || (kind === "branch" ? t("sources.defaultBranch") : t("sources.unspecified"))
   return `${kind}:${name}`
 }

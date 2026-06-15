@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 
 import { ChangeStateDialog } from "@/components/ChangeStateDialog"
 import { api, supportedStatesForTool } from "@/lib/api"
@@ -20,6 +21,7 @@ export function InventoryMatrix({
   run: InventoryRun | null | undefined
   onRefresh: () => void
 }) {
+  const { t } = useTranslation()
   const [drift, setDrift] = useState<DeviceDrift | null>(null)
   // The skill whose State cell was clicked (drives ChangeStateDialog).
   // null = dialog closed.
@@ -43,20 +45,17 @@ export function InventoryMatrix({
   }, [deviceId])
 
   if (run === undefined) {
-    return <p className="text-muted-foreground mt-3 text-sm">Loading skills…</p>
+    return <p className="text-muted-foreground mt-3 text-sm">{t("devices.loadingSkills")}</p>
   }
   if (run === null) {
     return (
-      <p className="text-muted-foreground mt-3 text-sm">
-        This device hasn't reported any skills yet. The agent uploads an inventory shortly after
-        approval.
-      </p>
+      <p className="text-muted-foreground mt-3 text-sm">{t("devices.noSkillsReported")}</p>
     )
   }
   if (run.skills.length === 0) {
     return (
       <p className="text-muted-foreground mt-3 text-sm">
-        Last scan found no skills across {run.root_count} root{run.root_count === 1 ? "" : "s"}.
+        {t("devices.noSkillsFound", { count: run.root_count })}
       </p>
     )
   }
@@ -78,11 +77,13 @@ export function InventoryMatrix({
   return (
     <div className="mt-3 space-y-4">
       <p className="text-muted-foreground text-xs">
-        {run.skill_count} skill{run.skill_count === 1 ? "" : "s"} across {run.root_count} root
-        {run.root_count === 1 ? "" : "s"}
-        {run.agent_version ? ` · agent ${run.agent_version}` : ""}
+        {t("devices.matrixSummary", { skills: run.skill_count, roots: run.root_count })}
+        {run.agent_version ? t("devices.matrixAgent", { version: run.agent_version }) : ""}
         {drift
-          ? ` · ${drift.summary.local_modified} modified, ${drift.summary.untracked} untracked`
+          ? t("devices.matrixDrift", {
+              modified: drift.summary.local_modified,
+              untracked: drift.summary.untracked,
+            })
           : ""}
       </p>
       {groups.map((g) => (
@@ -93,11 +94,11 @@ export function InventoryMatrix({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-muted-foreground border-b text-left text-xs">
-                <th className="px-3 py-1.5 font-medium">Skill</th>
-                <th className="px-3 py-1.5 font-medium">Scope</th>
-                <th className="px-3 py-1.5 font-medium">State</th>
-                <th className="px-3 py-1.5 font-medium">Local</th>
-                <th className="px-3 py-1.5 font-medium">Native</th>
+                <th className="px-3 py-1.5 font-medium">{t("devices.colSkill")}</th>
+                <th className="px-3 py-1.5 font-medium">{t("devices.colScope")}</th>
+                <th className="px-3 py-1.5 font-medium">{t("devices.colState")}</th>
+                <th className="px-3 py-1.5 font-medium">{t("devices.colLocal")}</th>
+                <th className="px-3 py-1.5 font-medium">{t("devices.colNative")}</th>
               </tr>
             </thead>
             <tbody>
@@ -109,7 +110,7 @@ export function InventoryMatrix({
                       <div className="text-muted-foreground text-xs">{s.description}</div>
                     ) : null}
                     {s.warnings && s.warnings.length > 0 ? (
-                      <div className="mt-0.5 text-xs text-amber-600">
+                      <div className="text-state-warn-600 mt-0.5 text-xs">
                         {s.warnings.map((w) => w.code).join(", ")}
                       </div>
                     ) : null}
@@ -121,12 +122,12 @@ export function InventoryMatrix({
                         type="button"
                         className="hover:bg-muted -mx-1 rounded px-1 py-0.5 text-left underline-offset-2 hover:underline"
                         onClick={() => setStateTarget(s)}
-                        title="点击更改启停状态"
+                        title={t("devices.clickToChangeState")}
                       >
                         <StateBadge state={s.effective_state} />
                       </button>
                     ) : (
-                      <span title="该工具无原生启停信号，不可远程更改">
+                      <span title={t("devices.noNativeStateSignal")}>
                         <StateBadge state={s.effective_state} />
                       </span>
                     )}

@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
+import type { TFunction } from "i18next"
 import { AlertCircle, ChevronDown, ChevronRight, Cpu, RefreshCw } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -16,6 +18,7 @@ import type { Device, InventoryRun } from "@/lib/api"
 // hides actions that would 4XX and shows a friendly post-action toast
 // via inline status messages.
 export function DevicesList() {
+  const { t } = useTranslation()
   const [busyId, setBusyId] = useState<string | null>(null)
   const [renderedAt, setRenderedAt] = useState(() => Date.now())
   const {
@@ -64,25 +67,22 @@ export function DevicesList() {
       <CardHeader>
         <CardTitle className="text-lg flex items-center gap-2">
           <Cpu className="text-primary size-5" aria-hidden />
-          Enrolled devices
+          {t("devices.enrolledTitle")}
         </CardTitle>
-        <CardDescription>
-          Approve pending agents so they can heartbeat and ship inventory; revoke any that
-          shouldn't be talking to this server anymore.
-        </CardDescription>
+        <CardDescription>{t("devices.enrolledDesc")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-end">
           <Button variant="ghost" size="sm" onClick={refresh}>
             <RefreshCw className="size-4" aria-hidden />
-            Refresh
+            {t("common.refresh")}
           </Button>
         </div>
 
         {error && (
           <Alert variant="destructive">
             <AlertCircle className="size-4" aria-hidden />
-            <AlertTitle>Device error</AlertTitle>
+            <AlertTitle>{t("devices.deviceError")}</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -112,16 +112,18 @@ function DeviceTable({
   onApprove: (id: string) => void
   onRevoke: (id: string) => void
 }) {
+  const { t } = useTranslation()
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   if (devices === null) {
-    return <p className="text-muted-foreground text-sm">Loading devices…</p>
+    return <p className="text-muted-foreground text-sm">{t("devices.loadingDevices")}</p>
   }
   if (devices.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
-        No devices enrolled yet. Mint an enrolment token above, then run{" "}
-        <code className="font-mono text-xs">skillfleet-agent enroll</code> on the target host.
+        {t("devices.noDevicesPrefix")}
+        <code className="font-mono text-xs">skillfleet-agent enroll</code>
+        {t("devices.noDevicesSuffix")}
       </p>
     )
   }
@@ -141,9 +143,9 @@ function DeviceTable({
                 </div>
                 <div className="text-muted-foreground text-xs">
                   <StatusBadge status={d.status} />
-                  <span className="ml-2">{describePlatform(d)}</span>
+                  <span className="ml-2">{describePlatform(d, t)}</span>
                   <span className="ml-2">
-                    · last seen {formatLastSeen(d.last_seen_at, renderedAt)}
+                    · {t("devices.lastSeen", { value: formatLastSeen(d.last_seen_at, renderedAt, t) })}
                   </span>
                 </div>
                 <div className="text-muted-foreground font-mono text-[10px]">{d.id}</div>
@@ -160,7 +162,7 @@ function DeviceTable({
                   ) : (
                     <ChevronRight className="size-4" aria-hidden />
                   )}
-                  Skills
+                  {t("devices.skills")}
                 </Button>
                 <DeviceActions
                   device={d}
@@ -179,6 +181,7 @@ function DeviceTable({
 }
 
 function DeviceInventoryPanel({ deviceId }: { deviceId: string }) {
+  const { t } = useTranslation()
   const [run, setRun] = useState<InventoryRun | null | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
@@ -205,7 +208,7 @@ function DeviceInventoryPanel({ deviceId }: { deviceId: string }) {
     return (
       <Alert variant="destructive" className="mt-3">
         <AlertCircle className="size-4" aria-hidden />
-        <AlertTitle>Inventory error</AlertTitle>
+        <AlertTitle>{t("devices.inventoryError")}</AlertTitle>
         <AlertDescription>{error}</AlertDescription>
       </Alert>
     )
@@ -240,45 +243,55 @@ function DeviceActions({
   onApprove: () => void
   onRevoke: () => void
 }) {
+  const { t } = useTranslation()
   if (device.status === "revoked") return null
   return (
     <div className="flex items-center gap-2">
       {device.status === "pending" && (
         <Button size="sm" onClick={onApprove} disabled={busy}>
-          {busy ? "Approving…" : "Approve"}
+          {busy ? t("devices.approving") : t("devices.approve")}
         </Button>
       )}
       <Button size="sm" variant="ghost" onClick={onRevoke} disabled={busy}>
-        {busy ? "Revoking…" : "Revoke"}
+        {busy ? t("devices.revoking") : t("devices.revoke")}
       </Button>
     </div>
   )
 }
 
+// StatusBadge colours the device lifecycle (approved/pending/revoked) with
+// semantic state tokens; the label is localised.
 function StatusBadge({ status }: { status: Device["status"] }) {
+  const { t } = useTranslation()
   const colour =
     status === "approved"
-      ? "text-emerald-600"
+      ? "text-state-clean-600"
       : status === "pending"
-        ? "text-amber-600"
+        ? "text-state-warn-600"
         : "text-muted-foreground"
-  return <span className={`font-medium uppercase tracking-wide ${colour}`}>{status}</span>
+  const label =
+    status === "approved"
+      ? t("devices.deviceStatus.approved")
+      : status === "pending"
+        ? t("devices.deviceStatus.pending")
+        : t("devices.deviceStatus.revoked")
+  return <span className={`font-medium uppercase tracking-wide ${colour}`}>{label}</span>
 }
 
-function describePlatform(d: Device): string {
+function describePlatform(d: Device, t: TFunction): string {
   const parts = [d.os, d.arch, d.agent_version].filter(Boolean)
-  return parts.join(" / ") || "unknown platform"
+  return parts.join(" / ") || t("devices.unknownPlatform")
 }
 
 // formatLastSeen returns "never", "5s ago", "2m ago", etc. Captures
 // renderedAt at the call site (not inline Date.now()) to keep render
 // deterministic for the react-hooks/purity rule.
-function formatLastSeen(ts: number | undefined, renderedAt: number): string {
-  if (!ts) return "never"
+function formatLastSeen(ts: number | undefined, renderedAt: number, t: TFunction): string {
+  if (!ts) return t("devices.never")
   const delta = Math.max(0, renderedAt - ts)
-  if (delta < 5_000) return "just now"
-  if (delta < 60_000) return `${Math.floor(delta / 1000)}s ago`
-  if (delta < 60 * 60_000) return `${Math.floor(delta / 60_000)}m ago`
-  if (delta < 24 * 60 * 60_000) return `${Math.floor(delta / 3_600_000)}h ago`
+  if (delta < 5_000) return t("devices.justNow")
+  if (delta < 60_000) return t("devices.secondsAgo", { n: Math.floor(delta / 1000) })
+  if (delta < 60 * 60_000) return t("devices.minutesAgo", { n: Math.floor(delta / 60_000) })
+  if (delta < 24 * 60 * 60_000) return t("devices.hoursAgo", { n: Math.floor(delta / 3_600_000) })
   return new Date(ts).toLocaleString()
 }

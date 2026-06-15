@@ -1,4 +1,5 @@
 import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react"
+import { useTranslation } from "react-i18next"
 import type { ValidationIssue } from "@/lib/api"
 
 /** Props for the ValidationPanel component. */
@@ -19,19 +20,20 @@ export interface ValidationPanelProps {
  *   clickable to jump to the file+line+col in Monaco.
  */
 export function ValidationPanel({ issues, onJump }: ValidationPanelProps) {
+  const { t } = useTranslation()
   if (issues === null) {
     return (
       <p className="text-muted-foreground text-xs">
-        Run validate to see results.
+        {t("skills.validation.prompt")}
       </p>
     )
   }
 
   if (issues.length === 0) {
     return (
-      <p className="flex items-center gap-1.5 text-xs text-emerald-600">
+      <p className="text-state-clean-600 flex items-center gap-1.5 text-xs">
         <CheckCircle2 className="size-3.5" aria-hidden />
-        No issues found.
+        {t("skills.validation.noIssues")}
       </p>
     )
   }
@@ -43,16 +45,16 @@ export function ValidationPanel({ issues, onJump }: ValidationPanelProps) {
     <div className="space-y-3 text-xs">
       {errors.length > 0 && (
         <SeverityGroup
-          label={`Errors (${errors.length})`}
-          labelColor="text-red-600"
+          label={t("skills.validation.errors", { count: errors.length })}
+          labelColor="text-state-danger-600"
           issues={errors}
           onJump={onJump}
         />
       )}
       {warnings.length > 0 && (
         <SeverityGroup
-          label={`Warnings (${warnings.length})`}
-          labelColor="text-amber-600"
+          label={t("skills.validation.warnings", { count: warnings.length })}
+          labelColor="text-state-warn-600"
           issues={warnings}
           onJump={onJump}
         />
@@ -83,7 +85,7 @@ function SeverityGroup({
           const location = hasPath ? `${i.path}${lineSeg}${colSeg} · ${i.code}` : i.code
           const isError = i.severity === "error"
           const Icon = isError ? XCircle : AlertTriangle
-          const iconColor = isError ? "text-red-600" : "text-amber-600"
+          const iconColor = isError ? "text-state-danger-600" : "text-state-warn-600"
 
           const body = (
             <>

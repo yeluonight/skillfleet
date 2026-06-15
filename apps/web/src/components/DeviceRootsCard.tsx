@@ -1,4 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from "react"
+import { useTranslation } from "react-i18next"
 import { AlertCircle, CheckCircle2, FolderCog, Plus, RefreshCw, Trash2 } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -27,6 +28,7 @@ export function DeviceRootsCard({
   loading?: boolean
   onRefresh: () => void
 }) {
+  const { t } = useTranslation()
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [busyKey, setBusyKey] = useState<string | null>(null)
@@ -44,7 +46,7 @@ export function DeviceRootsCard({
         scope: root.scope,
         path: root.path,
       })
-      setNote("Root registration job queued. The agent will apply it on its next poll.")
+      setNote(t("devices.registerQueued"))
       onRefresh()
     } catch (err) {
       setError(apiErrorMessage(err, "Failed to queue root registration."))
@@ -60,9 +62,7 @@ export function DeviceRootsCard({
     setNote(null)
     try {
       await api.removeDeviceRoot(deviceId, root.root_id)
-      setNote(
-        "Root removal job queued. Existing skill files are left on disk; the root becomes unmanaged after the agent applies it.",
-      )
+      setNote(t("devices.removeQueued"))
       onRefresh()
     } catch (err) {
       setError(apiErrorMessage(err, "Failed to queue root removal."))
@@ -75,7 +75,7 @@ export function DeviceRootsCard({
     event.preventDefault()
     const path = customPath.trim()
     if (!path) {
-      setError("Enter an absolute path to register.")
+      setError(t("devices.enterAbsolutePath"))
       return
     }
     setBusyKey("custom")
@@ -89,9 +89,7 @@ export function DeviceRootsCard({
         custom: true,
       })
       setCustomPath("")
-      setNote(
-        "Custom root registration job queued. The agent will accept it only if it passes local policy.",
-      )
+      setNote(t("devices.customQueued"))
       onRefresh()
     } catch (err) {
       setError(apiErrorMessage(err, "Failed to queue custom root registration."))
@@ -108,21 +106,19 @@ export function DeviceRootsCard({
 
       <div className="mt-3 space-y-3">
         {loading ? (
-          <p className="text-muted-foreground text-sm">Loading root candidates…</p>
+          <p className="text-muted-foreground text-sm">{t("devices.loadingRoots")}</p>
         ) : !hasInventory ? (
-          <p className="text-muted-foreground text-sm">
-            This device has not uploaded inventory yet, so WebUI root registration is unavailable.
-          </p>
+          <p className="text-muted-foreground text-sm">{t("devices.noInventoryForRoots")}</p>
         ) : (
           <div className="text-muted-foreground text-xs">
-            {roots.length} candidate root{roots.length === 1 ? "" : "s"} · {registered} registered
+            {t("devices.rootsSummary", { total: roots.length, registered })}
           </div>
         )}
 
         {error ? (
           <Alert variant="destructive">
             <AlertCircle className="size-4" aria-hidden />
-            <AlertTitle>Root action failed</AlertTitle>
+            <AlertTitle>{t("devices.rootActionFailed")}</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
@@ -130,15 +126,13 @@ export function DeviceRootsCard({
         {note ? (
           <Alert>
             <CheckCircle2 className="size-4" aria-hidden />
-            <AlertTitle>Job queued</AlertTitle>
+            <AlertTitle>{t("devices.jobQueued")}</AlertTitle>
             <AlertDescription>{note}</AlertDescription>
           </Alert>
         ) : null}
 
         {hasInventory && roots.length === 0 ? (
-          <p className="text-muted-foreground text-sm">
-            No candidate roots reported. The next agent inventory run may surface supported tool paths.
-          </p>
+          <p className="text-muted-foreground text-sm">{t("devices.noCandidateRoots")}</p>
         ) : null}
 
         {roots.length > 0 ? (
@@ -158,15 +152,12 @@ export function DeviceRootsCard({
         <form className="rounded-md border p-3" onSubmit={registerCustom}>
           <div className="mb-2 flex items-center gap-2 text-sm font-medium">
             <Plus className="text-primary size-4" aria-hidden />
-            Add custom path
+            {t("devices.addCustomPath")}
           </div>
-          <p className="text-muted-foreground mb-3 text-xs">
-            The server queues the request; the agent accepts only existing directories that are known
-            candidates or true children of its home directory.
-          </p>
+          <p className="text-muted-foreground mb-3 text-xs">{t("devices.customPathHint")}</p>
           <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_7rem_minmax(12rem,2fr)_auto]">
             <label className="text-xs">
-              <span className="text-muted-foreground mb-1 block">Tool</span>
+              <span className="text-muted-foreground mb-1 block">{t("devices.tool")}</span>
               <select
                 className="bg-background h-8 w-full rounded-lg border px-2 text-sm"
                 value={customTool}
@@ -180,7 +171,7 @@ export function DeviceRootsCard({
               </select>
             </label>
             <label className="text-xs">
-              <span className="text-muted-foreground mb-1 block">Scope</span>
+              <span className="text-muted-foreground mb-1 block">{t("devices.scope")}</span>
               <select
                 className="bg-background h-8 w-full rounded-lg border px-2 text-sm"
                 value={customScope}
@@ -191,7 +182,7 @@ export function DeviceRootsCard({
               </select>
             </label>
             <label className="text-xs">
-              <span className="text-muted-foreground mb-1 block">Absolute path</span>
+              <span className="text-muted-foreground mb-1 block">{t("devices.absolutePath")}</span>
               <Input
                 value={customPath}
                 onChange={(event) => setCustomPath(event.target.value)}
@@ -200,7 +191,7 @@ export function DeviceRootsCard({
             </label>
             <div className="flex items-end">
               <Button type="submit" size="sm" disabled={busyKey === "custom"}>
-                {busyKey === "custom" ? "Queueing…" : "Queue"}
+                {busyKey === "custom" ? t("devices.queueing") : t("devices.queue")}
               </Button>
             </div>
           </div>
@@ -211,20 +202,19 @@ export function DeviceRootsCard({
 }
 
 function RootsHeader({ onRefresh }: { onRefresh: () => void }) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
         <div className="flex items-center gap-2 text-sm font-semibold">
           <FolderCog className="text-primary size-4" aria-hidden />
-          Skill roots
+          {t("devices.rootsTitle")}
         </div>
-        <p className="text-muted-foreground text-xs">
-          Register directories this agent may manage for install and state-change jobs.
-        </p>
+        <p className="text-muted-foreground text-xs">{t("devices.rootsDesc")}</p>
       </div>
       <Button type="button" variant="ghost" size="sm" onClick={onRefresh}>
         <RefreshCw className="size-4" aria-hidden />
-        Refresh
+        {t("common.refresh")}
       </Button>
     </div>
   )
@@ -241,6 +231,7 @@ function RootRow({
   onRegister: () => void
   onRemove: () => void
 }) {
+  const { t } = useTranslation()
   const registerBusy = busyKey === `register:${root.path}`
   const removeBusy = busyKey === `remove:${root.root_id}`
   return (
@@ -249,20 +240,27 @@ function RootRow({
         <div className="flex flex-wrap items-center gap-1.5 text-sm">
           <span className="font-medium">{root.tool_key}</span>
           <MetaPill>{root.scope}</MetaPill>
-          {root.registered ? <MetaPill>registered</MetaPill> : <MetaPill>candidate</MetaPill>}
-          {root.shared ? <MetaPill>shared</MetaPill> : null}
-          {root.exists ? <MetaPill>exists</MetaPill> : <MetaPill>missing</MetaPill>}
-          {root.tool_detected ? <MetaPill>tool detected</MetaPill> : null}
+          {root.registered ? (
+            <MetaPill>{t("devices.pill.registered")}</MetaPill>
+          ) : (
+            <MetaPill>{t("devices.pill.candidate")}</MetaPill>
+          )}
+          {root.shared ? <MetaPill>{t("devices.pill.shared")}</MetaPill> : null}
+          {root.exists ? (
+            <MetaPill>{t("devices.pill.exists")}</MetaPill>
+          ) : (
+            <MetaPill>{t("devices.pill.missing")}</MetaPill>
+          )}
+          {root.tool_detected ? <MetaPill>{t("devices.pill.toolDetected")}</MetaPill> : null}
         </div>
         <div className="text-muted-foreground break-all font-mono text-xs">{root.path}</div>
         {root.display_tmpl ? (
-          <div className="text-muted-foreground text-xs">Template: {root.display_tmpl}</div>
+          <div className="text-muted-foreground text-xs">
+            {t("devices.template", { tmpl: root.display_tmpl })}
+          </div>
         ) : null}
         {root.shared ? (
-          <div className="text-muted-foreground text-xs">
-            Shared .agents/skills root: one install is visible to every tool that reads the shared
-            directory.
-          </div>
+          <div className="text-muted-foreground text-xs">{t("devices.sharedRootHint")}</div>
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -275,7 +273,7 @@ function RootRow({
             disabled={removeBusy || !root.root_id}
           >
             <Trash2 className="size-4" aria-hidden />
-            {removeBusy ? "Queueing…" : "Remove"}
+            {removeBusy ? t("devices.queueing") : t("devices.remove")}
           </Button>
         ) : (
           <Button
@@ -283,9 +281,9 @@ function RootRow({
             size="sm"
             onClick={onRegister}
             disabled={registerBusy || !root.exists}
-            title={root.exists ? undefined : "Create the directory on the device first"}
+            title={root.exists ? undefined : t("devices.createDirFirst")}
           >
-            {registerBusy ? "Queueing…" : "Register"}
+            {registerBusy ? t("devices.queueing") : t("devices.register")}
           </Button>
         )}
       </div>

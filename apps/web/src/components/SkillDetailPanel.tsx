@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { Braces, FileCode, FilePlus, GitBranch, GitMerge, Minimize2, Save, Send, Trash2, Upload } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -47,6 +48,7 @@ import type { editor } from "monaco-editor"
 // those lives HERE (the SourceTab/BindWizard components are pure/controlled);
 // the helpers below own the api calls and surface ApiError messages inline.
 export function SkillDetailPanel({ name, onChanged }: { name: string; onChanged: () => void }) {
+  const { t } = useTranslation()
   const {
     data: detail,
     error,
@@ -54,7 +56,7 @@ export function SkillDetailPanel({ name, onChanged }: { name: string; onChanged:
     setError,
   } = useApiResource<SkillDetail>(() => api.getSkill(name), {
     deps: [name],
-    errorFallback: "Failed to load versions.",
+    errorFallback: t("skills.err.loadVersions"),
   })
   const [draft, setDraft] = useState<Draft | null>(null)
 
@@ -66,7 +68,7 @@ export function SkillDetailPanel({ name, onChanged }: { name: string; onChanged:
       setDraft(d)
       setError(null)
     } catch (err) {
-      setError(apiErrorMessage(err, "Failed to create draft."))
+      setError(apiErrorMessage(err, t("skills.err.createDraft")))
     }
   }
 
@@ -84,10 +86,10 @@ export function SkillDetailPanel({ name, onChanged }: { name: string; onChanged:
   }
 
   if (error) {
-    return <p className="mt-3 text-xs text-red-600">{error}</p>
+    return <p className="text-state-danger-600 mt-3 text-xs">{error}</p>
   }
   if (detail === null) {
-    return <p className="text-muted-foreground mt-3 text-sm">Loading…</p>
+    return <p className="text-muted-foreground mt-3 text-sm">{t("skills.loadingDetail")}</p>
   }
 
   const versions = detail.versions
@@ -113,7 +115,7 @@ export function SkillDetailPanel({ name, onChanged }: { name: string; onChanged:
           <VersionList versions={versions} />
           <Button size="sm" variant="secondary" onClick={startDraft} disabled={versions.length === 0}>
             <GitBranch className="size-4" aria-hidden />
-            Edit (fork latest into a draft)
+            {t("skills.editFork")}
           </Button>
         </>
       )}
@@ -144,6 +146,7 @@ function SourceSection({
   lastCheckedAt?: number
   onChanged: () => Promise<void> | void
 }) {
+  const { t } = useTranslation()
   const [wizardOpen, setWizardOpen] = useState(false)
   const [preview, setPreview] = useState<BindPreview | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
@@ -178,7 +181,7 @@ function SourceSection({
       const d = await api.upstreamDiff(name)
       setDiff(d)
     } catch (err) {
-      setDiffError(apiErrorMessage(err, "加载差异失败。"))
+      setDiffError(apiErrorMessage(err, t("sources.err.loadDiff")))
     } finally {
       setDiffLoading(false)
     }
@@ -198,7 +201,7 @@ function SourceSection({
       const d = await api.threeWayDiff(name)
       setThreeWay(d)
     } catch (err) {
-      setMergeError(apiErrorMessage(err, "加载三方差异失败。"))
+      setMergeError(apiErrorMessage(err, t("sources.err.loadThreeWay")))
     } finally {
       setMergeLoading(false)
     }
@@ -221,7 +224,7 @@ function SourceSection({
       setPreview(p)
     } catch (err) {
       setPreview(null)
-      setPreviewError(apiErrorMessage(err, "拉取预览失败。"))
+      setPreviewError(apiErrorMessage(err, t("sources.err.preview")))
     } finally {
       setBusy(false)
     }
@@ -245,7 +248,7 @@ function SourceSection({
       // Bind errors (already-bound, fetch failure) surface as previewError on
       // the form step; clear the preview so the wizard navigates back to it.
       setPreview(null)
-      setPreviewError(apiErrorMessage(err, "绑定失败。"))
+      setPreviewError(apiErrorMessage(err, t("sources.err.bind")))
     } finally {
       setBusy(false)
     }
@@ -263,7 +266,7 @@ function SourceSection({
       })
       await onChanged() // last_checked_at advanced server-side
     } catch (err) {
-      setActionError(apiErrorMessage(err, "检查更新失败。"))
+      setActionError(apiErrorMessage(err, t("sources.err.checkUpdates")))
     } finally {
       setBusy(false)
     }
@@ -277,7 +280,7 @@ function SourceSection({
       setLastCheck(null)
       await onChanged()
     } catch (err) {
-      setActionError(apiErrorMessage(err, "解绑失败。"))
+      setActionError(apiErrorMessage(err, t("sources.err.detach")))
     } finally {
       setBusy(false)
     }
@@ -302,7 +305,7 @@ function SourceSection({
         onDetach={detachSource}
         onViewDiff={openDiff}
       />
-      {actionError && <p className="text-xs text-red-600">{actionError}</p>}
+      {actionError && <p className="text-state-danger-600 text-xs">{actionError}</p>}
 
       {/* Three-way merge entry (phase 7): only meaningful once bound. The
           view itself handles "no pending update" gracefully, so we surface
@@ -310,7 +313,7 @@ function SourceSection({
       {sourceState === "bound" ? (
         <Button type="button" size="sm" variant="ghost" onClick={openMerge} disabled={busy}>
           <GitMerge className="size-4" aria-hidden />
-          三方合并
+          {t("sources.threeWayMerge")}
         </Button>
       ) : null}
 
@@ -337,9 +340,9 @@ function SourceSection({
       <Dialog open={diffOpen} onOpenChange={setDiffOpen}>
         <DialogContent className="max-h-[90vh] overflow-auto sm:max-w-5xl">
           <DialogHeader>
-            <DialogTitle>上游差异 · {name}</DialogTitle>
+            <DialogTitle>{t("sources.upstreamDiffTitle", { name })}</DialogTitle>
             <DialogDescription>
-              对比当前上游基线与待处理的上游更新（两方差异）。
+              {t("sources.upstreamDiffDesc")}
             </DialogDescription>
           </DialogHeader>
           <UpstreamDiffView
@@ -354,9 +357,9 @@ function SourceSection({
       <Dialog open={mergeOpen} onOpenChange={setMergeOpen}>
         <DialogContent className="max-h-[90vh] overflow-auto sm:max-w-5xl">
           <DialogHeader>
-            <DialogTitle>三方合并 · {name}</DialogTitle>
+            <DialogTitle>{t("sources.threeWayTitle", { name })}</DialogTitle>
             <DialogDescription>
-              base · 本地 · 上游 三方对比（§5.5）。base↔上游为行级差异；本地副本仅有内容指纹，逐文件本地差异与写回留待 Phase 8。
+              {t("sources.threeWayDesc")}
             </DialogDescription>
           </DialogHeader>
           <ThreeWayMergeView
@@ -376,11 +379,12 @@ function SourceSection({
 }
 
 function VersionList({ versions }: { versions: SkillVersion[] }) {
+  const { t } = useTranslation()
   const [filesFor, setFilesFor] = useState<string | null>(versions[0]?.id ?? null)
   return (
     <div className="space-y-2">
       <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
-        Versions
+        {t("skills.versions")}
       </div>
       <ul className="space-y-1">
         {versions.map((v) => (
@@ -391,9 +395,13 @@ function VersionList({ versions }: { versions: SkillVersion[] }) {
             >
               <span className="font-mono text-xs">{v.id}</span>
               <span className="text-muted-foreground text-xs">
-                {v.kind}
-                {v.version_label ? ` · ${v.version_label}` : ""} · {v.file_count} file
-                {v.file_count === 1 ? "" : "s"}
+                {v.version_label
+                  ? t("skills.versionMetaWithLabel", {
+                      kind: v.kind,
+                      label: v.version_label,
+                      count: v.file_count,
+                    })
+                  : t("skills.versionMeta", { kind: v.kind, count: v.file_count })}
               </span>
             </button>
             {filesFor === v.id ? <VersionFileTree versionId={v.id} /> : null}
@@ -405,25 +413,26 @@ function VersionList({ versions }: { versions: SkillVersion[] }) {
 }
 
 function VersionFileTree({ versionId }: { versionId: string }) {
+  const { t } = useTranslation()
   const {
     data,
     error: err,
   } = useApiResource<{ files: VersionFileEntry[] }>(() => api.versionFiles(versionId), {
     deps: [versionId],
-    errorFallback: "Failed to load files.",
+    errorFallback: t("skills.err.loadFiles"),
   })
   const files = data?.files ?? null
 
-  if (err) return <p className="px-2 py-1 text-xs text-red-600">{err}</p>
-  if (files === null) return <p className="text-muted-foreground px-2 py-1 text-xs">Loading files…</p>
+  if (err) return <p className="text-state-danger-600 px-2 py-1 text-xs">{err}</p>
+  if (files === null) return <p className="text-muted-foreground px-2 py-1 text-xs">{t("skills.loadingFiles")}</p>
   return (
     <ul className="border-border ml-4 mt-1 space-y-0.5 border-l pl-3">
       {files.map((f) => (
         <li key={f.path} className="flex items-center justify-between gap-2 text-xs">
           <span className="font-mono">{f.path}</span>
           <span className="text-muted-foreground">
-            {f.binary ? "binary" : "text"} · {f.size}B{f.exec ? " · exec" : ""}
-            {!f.editable && !f.binary ? " · large" : ""}
+            {f.binary ? t("skills.fileBinary") : t("skills.fileText")} · {f.size}B{f.exec ? ` · ${t("skills.fileExec")}` : ""}
+            {!f.editable && !f.binary ? ` · ${t("skills.fileLarge")}` : ""}
           </span>
         </li>
       ))}
@@ -440,6 +449,7 @@ function DraftEditor({
   onPublished: () => void
   onDiscarded: () => void
 }) {
+  const { t } = useTranslation()
   const [files, setFiles] = useState<Draft["files"]>(draft.files)
   const [selected, setSelected] = useState<string>(
     draft.files.find((f) => f.path === "SKILL.md")?.path ?? draft.files[0]?.path ?? "",
@@ -513,7 +523,7 @@ function DraftEditor({
       setDirty(false)
       setError(null)
     } catch (err) {
-      setError(apiErrorMessage(err, "Failed to convert file."))
+      setError(apiErrorMessage(err, t("skills.err.convertFile")))
     } finally {
       setBusy(false)
     }
@@ -529,7 +539,7 @@ function DraftEditor({
       setDirty(false)
       setError(null)
     } catch (err) {
-      setError(apiErrorMessage(err, "Failed to save file."))
+      setError(apiErrorMessage(err, t("skills.err.saveFile")))
     } finally {
       setBusy(false)
     }
@@ -546,7 +556,7 @@ function DraftEditor({
       selectFile(path)
       setError(null)
     } catch (err) {
-      setError(apiErrorMessage(err, "Failed to add file."))
+      setError(apiErrorMessage(err, t("skills.err.addFile")))
     } finally {
       setBusy(false)
     }
@@ -561,7 +571,7 @@ function DraftEditor({
       if (selected === path) selectFile(remaining[0]?.path ?? "")
       setError(null)
     } catch (err) {
-      setError(apiErrorMessage(err, "Failed to delete file."))
+      setError(apiErrorMessage(err, t("skills.err.deleteFile")))
     } finally {
       setBusy(false)
     }
@@ -589,7 +599,7 @@ function DraftEditor({
       selectFile(target)
       setError(null)
     } catch (err) {
-      setError(apiErrorMessage(err, "Failed to rename file."))
+      setError(apiErrorMessage(err, t("skills.err.renameFile")))
     } finally {
       setBusy(false)
     }
@@ -632,7 +642,7 @@ function DraftEditor({
       selectFile(path)
       setError(null)
     } catch (err) {
-      setError(apiErrorMessage(err, "Failed to upload file."))
+      setError(apiErrorMessage(err, t("skills.err.uploadFile")))
     } finally {
       setBusy(false)
     }
@@ -650,7 +660,7 @@ function DraftEditor({
       await api.publishDraft(draft.id)
       onPublished()
     } catch (err) {
-      setError(apiErrorMessage(err, "Failed to publish."))
+      setError(apiErrorMessage(err, t("skills.err.publish")))
       setBusy(false)
     }
   }
@@ -661,7 +671,7 @@ function DraftEditor({
       await api.deleteDraft(draft.id)
       onDiscarded()
     } catch (err) {
-      setError(apiErrorMessage(err, "Failed to discard draft."))
+      setError(apiErrorMessage(err, t("skills.err.discardDraft")))
       setBusy(false)
     }
   }
@@ -714,19 +724,19 @@ function DraftEditor({
   }
 
   const paletteActions: CommandAction[] = [
-    { id: "save", label: "Save file", keywords: "保存 write", shortcut: "⌘S", run: () => void save(), disabled: busy || !dirty || !editable },
-    { id: "publish", label: "Validate & publish", keywords: "校验 发布 validate publish", shortcut: "⌘↵", run: () => void publish(), disabled: busy },
-    { id: "newfile", label: "New file", keywords: "新建 文件 add create", run: () => document.getElementById("sf-newfile-input")?.focus() },
-    { id: "upload", label: "Upload file", keywords: "上传 import", run: triggerUpload },
-    { id: "discard", label: "Discard draft", keywords: "丢弃 删除 delete cancel", run: () => void discard(), disabled: busy },
+    { id: "save", label: t("skills.palette.saveFile"), keywords: "保存 write save 文件", shortcut: "⌘S", run: () => void save(), disabled: busy || !dirty || !editable },
+    { id: "publish", label: t("skills.palette.validatePublish"), keywords: "校验 发布 validate publish", shortcut: "⌘↵", run: () => void publish(), disabled: busy },
+    { id: "newfile", label: t("skills.palette.newFile"), keywords: "新建 文件 add create", run: () => document.getElementById("sf-newfile-input")?.focus() },
+    { id: "upload", label: t("skills.palette.uploadFile"), keywords: "上传 import upload", run: triggerUpload },
+    { id: "discard", label: t("skills.palette.discardDraft"), keywords: "丢弃 删除 delete cancel discard", run: () => void discard(), disabled: busy },
     ...(isJson && editable
       ? [
-          { id: "json-format", label: "Format JSON", keywords: "格式化 美化 pretty", run: () => applyJsonTool("format") },
-          { id: "json-minify", label: "Minify JSON", keywords: "压缩 compress", run: () => applyJsonTool("minify") },
+          { id: "json-format", label: t("skills.palette.formatJson"), keywords: "格式化 美化 pretty format json", run: () => applyJsonTool("format") },
+          { id: "json-minify", label: t("skills.palette.minifyJson"), keywords: "压缩 compress minify json", run: () => applyJsonTool("minify") },
         ]
       : []),
     ...(hasBom && editable
-      ? [{ id: "convert-utf8", label: "Convert to UTF-8 (strip BOM)", keywords: "编码 转换 encoding bom", run: () => void convertAndSave(), disabled: busy }]
+      ? [{ id: "convert-utf8", label: t("skills.palette.convertUtf8"), keywords: "编码 转换 encoding bom utf8", run: () => void convertAndSave(), disabled: busy }]
       : []),
   ]
 
@@ -758,17 +768,17 @@ function DraftEditor({
         <div className="flex min-w-0 items-center gap-2">
           <span className="text-muted-foreground truncate font-mono text-xs" title={selected}>
             {selected || "—"}
-            {dirty && <span className="ml-1 text-amber-500">●</span>}
+            {dirty && <span className="text-state-warn-600 ml-1">●</span>}
           </span>
           {encoding && (
             <span
               className={
                 "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium " +
                 (hasBom
-                  ? "bg-amber-500/15 text-amber-600"
+                  ? "bg-state-warn-50 text-state-warn-600"
                   : "bg-muted text-muted-foreground")
               }
-              title={hasBom ? "File has a UTF-8 byte-order mark" : `Encoding: ${encoding}`}
+              title={hasBom ? t("skills.bomTip") : t("skills.encodingTip", { encoding })}
             >
               {encoding}
             </span>
@@ -777,25 +787,25 @@ function DraftEditor({
         <div className="flex shrink-0 items-center gap-1.5">
           {isJson && editable && (
             <>
-              <Button size="sm" variant="ghost" onClick={() => applyJsonTool("format")} disabled={busy} title="Format JSON">
+              <Button size="sm" variant="ghost" onClick={() => applyJsonTool("format")} disabled={busy} title={t("skills.formatJsonTip")}>
                 <Braces className="size-3.5" aria-hidden />
-                Format
+                {t("skills.formatJson")}
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => applyJsonTool("minify")} disabled={busy} title="Minify JSON">
+              <Button size="sm" variant="ghost" onClick={() => applyJsonTool("minify")} disabled={busy} title={t("skills.minifyJsonTip")}>
                 <Minimize2 className="size-3.5" aria-hidden />
-                Minify
+                {t("skills.minifyJson")}
               </Button>
             </>
           )}
           {hasBom && editable && (
-            <Button size="sm" variant="ghost" onClick={convertAndSave} disabled={busy} title="Strip the BOM and save as UTF-8">
+            <Button size="sm" variant="ghost" onClick={convertAndSave} disabled={busy} title={t("skills.convertUtf8Tip")}>
               <FileCode className="size-3.5" aria-hidden />
-              Convert to UTF-8
+              {t("skills.convertUtf8")}
             </Button>
           )}
           <Button size="sm" variant="secondary" onClick={save} disabled={busy || !dirty || !editable}>
             <Save className="size-3.5" aria-hidden />
-            {dirty ? "Save" : "Saved"}
+            {dirty ? t("common.save") : t("skills.saved")}
           </Button>
         </div>
       </div>
@@ -814,7 +824,7 @@ function DraftEditor({
         ) : current ? (
           <BinaryFileView file={current} onDownload={() => downloadFile(current.path)} />
         ) : (
-          <p className="text-muted-foreground p-3 text-xs">Select a file to edit.</p>
+          <p className="text-muted-foreground p-3 text-xs">{t("skills.selectFile")}</p>
         )}
       </div>
     </div>
@@ -825,7 +835,7 @@ function DraftEditor({
       {isMarkdown && (
         <div className="border-border min-h-0 flex-1 overflow-auto border-b p-3">
           <div className="text-muted-foreground mb-2 text-[11px] font-semibold uppercase tracking-wide">
-            Preview
+            {t("skills.preview")}
           </div>
           <MarkdownPreview source={content} />
         </div>
@@ -840,21 +850,21 @@ function DraftEditor({
     <div className="border-border space-y-3 rounded-md border p-3">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium">
-          Draft <span className="text-muted-foreground font-mono text-xs">{draft.id}</span>
+          {t("skills.draft")} <span className="text-muted-foreground font-mono text-xs">{draft.id}</span>
         </span>
         <div className="flex items-center gap-2">
           <Button size="sm" onClick={publish} disabled={busy}>
             <Send className="size-4" aria-hidden />
-            Validate &amp; publish
+            {t("skills.validatePublish")}
           </Button>
           <Button size="sm" variant="ghost" onClick={discard} disabled={busy}>
             <Trash2 className="size-4" aria-hidden />
-            Discard
+            {t("skills.discard")}
           </Button>
         </div>
       </div>
 
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-state-danger-600 text-xs">{error}</p>}
 
       {/* Desktop: three-pane resizable split. */}
       <div className="hidden h-[32rem] md:block">
@@ -863,7 +873,7 @@ function DraftEditor({
 
       {/* Mobile: a single pane at a time, chosen by a four-tab bar (t11). */}
       <div className="md:hidden">
-        <div role="tablist" aria-label="Editor panes" className="border-border grid grid-cols-4 gap-1 border-b pb-2">
+        <div role="tablist" aria-label={t("skills.editorPanes")} className="border-border grid grid-cols-4 gap-1 border-b pb-2">
           {(["files", "editor", "preview", "validate"] as const).map((tab) => (
             <button
               key={tab}
@@ -871,13 +881,13 @@ function DraftEditor({
               aria-selected={mobileTab === tab}
               onClick={() => setMobileTab(tab)}
               className={
-                "rounded px-2 py-1 text-xs capitalize " +
+                "rounded px-2 py-1 text-xs " +
                 (mobileTab === tab
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:bg-muted")
               }
             >
-              {tab}
+              {t(`skills.tab.${tab}`)}
             </button>
           ))}
         </div>
@@ -890,7 +900,7 @@ function DraftEditor({
                 <MarkdownPreview source={content} />
               </div>
             ) : (
-              <p className="text-muted-foreground p-3 text-xs">Preview is available for Markdown files.</p>
+              <p className="text-muted-foreground p-3 text-xs">{t("skills.previewMarkdownOnly")}</p>
             )
           )}
           {mobileTab === "validate" && (
@@ -907,8 +917,8 @@ function DraftEditor({
       <Dialog open={renaming !== null} onOpenChange={(o) => !o && setRenaming(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Rename file</DialogTitle>
-            <DialogDescription>Enter a new package-relative path.</DialogDescription>
+            <DialogTitle>{t("skills.renameTitle")}</DialogTitle>
+            <DialogDescription>{t("skills.renameDesc")}</DialogDescription>
           </DialogHeader>
           <Input
             value={renameTo}
@@ -924,7 +934,7 @@ function DraftEditor({
           />
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setRenaming(null)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               size="sm"
@@ -936,7 +946,7 @@ function DraftEditor({
                 void renameFile(from, renameTo)
               }}
             >
-              Rename
+              {t("skills.rename")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -946,14 +956,14 @@ function DraftEditor({
       <Dialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete file</DialogTitle>
+            <DialogTitle>{t("skills.deleteTitle")}</DialogTitle>
             <DialogDescription>
-              Delete <span className="font-mono">{deleting}</span>? This cannot be undone.
+              {t("skills.deleteDescPrefix")}<span className="font-mono">{deleting}</span>{t("skills.deleteDescSuffix")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setDeleting(null)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -966,7 +976,7 @@ function DraftEditor({
                 void removeFile(p)
               }}
             >
-              Delete
+              {t("skills.ctxDelete")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1005,11 +1015,12 @@ function FileTreePanel({
   onDownload: (path: string) => void
   onUploadClick: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="flex h-full flex-col gap-1 p-2">
       <div className="flex items-center justify-between">
-        <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">Files</span>
-        <Button size="sm" variant="ghost" onClick={onUploadClick} disabled={busy} aria-label="Upload file">
+        <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">{t("skills.files")}</span>
+        <Button size="sm" variant="ghost" onClick={onUploadClick} disabled={busy} aria-label={t("skills.uploadFile")}>
           <Upload className="size-3.5" aria-hidden />
         </Button>
       </div>
@@ -1038,11 +1049,11 @@ function FileTreePanel({
                 </button>
               </ContextMenuTrigger>
               <ContextMenuContent>
-                <ContextMenuItem onSelect={() => onRename(f.path)}>Rename</ContextMenuItem>
-                <ContextMenuItem onSelect={() => onDownload(f.path)}>Download</ContextMenuItem>
+                <ContextMenuItem onSelect={() => onRename(f.path)}>{t("skills.ctxRename")}</ContextMenuItem>
+                <ContextMenuItem onSelect={() => onDownload(f.path)}>{t("skills.ctxDownload")}</ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem variant="destructive" onSelect={() => onDelete(f.path)}>
-                  Delete
+                  {t("skills.ctxDelete")}
                 </ContextMenuItem>
               </ContextMenuContent>
             </ContextMenu>
@@ -1054,7 +1065,7 @@ function FileTreePanel({
           id="sf-newfile-input"
           value={newPath}
           onChange={(e) => onNewPathChange(e.target.value)}
-          placeholder="new/file.md"
+          placeholder={t("skills.newFilePlaceholder")}
           className="h-7 font-mono text-xs"
           onKeyDown={(e) => {
             if (e.key === "Enter") onAddFile()

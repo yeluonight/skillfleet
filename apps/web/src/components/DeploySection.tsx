@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
-import { AlertCircle, Info, Rocket, Send } from "lucide-react"
+import { AlertCircle, AlertTriangle, Info, Rocket, Send } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -37,6 +38,7 @@ export function DeploySection({
   skillName: string
   versions: SkillVersion[]
 }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [versionId, setVersionId] = useState(versions[0]?.id ?? "")
   const [devices, setDevices] = useState<Device[]>([])
@@ -51,6 +53,9 @@ export function DeploySection({
   // Per-row rollback busy (single-flight useAsyncAction doesn't fit a
   // per-job spinner).
   const [rollbackBusyId, setRollbackBusyId] = useState<string | null>(null)
+  // Rollback is a danger op (§13.8.1): clicking a row's rollback opens a
+  // confirm dialog keyed by job id; the actual API call waits for confirm.
+  const [rollbackConfirmId, setRollbackConfirmId] = useState<string | null>(null)
   const [renderedAt, setRenderedAt] = useState(() => Date.now())
 
   // Job list: initial load on skill change + a steady 4s poll so a
@@ -68,7 +73,7 @@ export function DeploySection({
       setRenderedAt(Date.now())
       return res
     },
-    { deps: [skillName], pollMs: 4000, errorFallback: "Failed to load deployment jobs." },
+    { deps: [skillName], pollMs: 4000, errorFallback: t("deploys.err.loadJobs") },
   )
   const jobs = jobsData?.jobs ?? []
   const target = targets[targetIdx]
@@ -88,7 +93,7 @@ export function DeploySection({
           setActionError(null)
         }
       } catch (err) {
-        if (!cancelled) setActionError(apiErrorMessage(err, "Failed to preview deployment plan."))
+        if (!cancelled) setActionError(apiErrorMessage(err, t("deploys.err.previewPlan")))
       } finally {
         if (!cancelled) setPlanLoading(false)
       }
@@ -96,7 +101,7 @@ export function DeploySection({
     return () => {
       cancelled = true
     }
-  }, [canPreview, deviceId, skillName, target, versionId])
+  }, [canPreview, deviceId, skillName, target, versionId, t])
 
   async function openDialog() {
     setActionError(null)
@@ -111,7 +116,7 @@ export function DeploySection({
         void loadTargets(approved[0].id)
       }
     } catch (err) {
-      setActionError(apiErrorMessage(err, "Failed to load devices."))
+      setActionError(apiErrorMessage(err, t("deploys.err.loadDevices")))
     }
   }
 
@@ -133,13 +138,13 @@ export function DeploySection({
 
   async function execute() {
     if (!versionId || !deviceId) {
-      setActionError("Select a version and a device.")
+      setActionError(t("deploys.err.selectVersionDevice"))
       return
     }
     setActionError(null)
     const ok = await deployAction.run(
       () => api.executeDeployment(deployBody(skillName, versionId, deviceId, target)),
-      "Failed to deploy.",
+      t("deploys.err.deploy"),
     )
     if (ok) {
       setOpen(false)
@@ -147,13 +152,22 @@ export function DeploySection({
     }
   }
 
-  async function rollback(jobId: string) {
+  // Danger op: JobsList's rollback button only opens the confirm dialog;
+  // the real API call runs in confirmRollback after the operator confirms.
+  function requestRollback(jobId: string) {
+    setRollbackConfirmId(jobId)
+  }
+
+  async function confirmRollback() {
+    const jobId = rollbackConfirmId
+    if (!jobId) return
+    setRollbackConfirmId(null)
     setRollbackBusyId(jobId)
     try {
       await api.rollbackDeployment(jobId)
       await refreshJobs()
     } catch (err) {
-      setJobsError(apiErrorMessage(err, "Failed to roll back."))
+      setJobsError(apiErrorMessage(err, t("deploys.err.rollback")))
     } finally {
       setRollbackBusyId(null)
     }
@@ -168,11 +182,11 @@ export function DeploySection({
     <div className="space-y-3 border-t pt-4">
       <div className="flex items-center justify-between gap-2">
         <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
-          Deploy
+          {t("deploys.sectionLabel")}
         </div>
         <Button size="sm" variant="secondary" onClick={openDialog} disabled={versions.length === 0}>
           <Rocket className="size-4" aria-hidden />
-          Deploy to device
+          {t("deploys.deployToDevice")}
         </Button>
       </div>
 
@@ -181,7 +195,7 @@ export function DeploySection({
         loading={jobsLoading}
         error={jobsError}
         onRefresh={() => refreshJobs()}
-        onRollback={rollback}
+        onRollback={requestRollback}
         rollbackBusyId={rollbackBusyId}
         renderedAt={renderedAt}
       />
@@ -189,15 +203,15 @@ export function DeploySection({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>部署 {skillName}</DialogTitle>
+            <DialogTitle>{t("deploys.dialogTitle", { name: skillName })}</DialogTitle>
             <DialogDescription>
-              选择版本与目标设备，下发一个安装任务。设备上线后会拉取并安装。
+              {t("deploys.dialogDesc")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
             <label className="block text-sm">
-              <span className="text-muted-foreground mb-1 block text-xs">版本</span>
+              <span className="text-muted-foreground mb-1 block text-xs">{t("deploys.version")}</span>
               <select
                 className="bg-background h-9 w-full rounded-md border px-2 text-sm"
                 value={versionId}
@@ -213,13 +227,13 @@ export function DeploySection({
             </label>
 
             <label className="block text-sm">
-              <span className="text-muted-foreground mb-1 block text-xs">设备（仅已批准）</span>
+              <span className="text-muted-foreground mb-1 block text-xs">{t("deploys.deviceApprovedOnly")}</span>
               <select
                 className="bg-background h-9 w-full rounded-md border px-2 text-sm"
                 value={deviceId}
                 onChange={(e) => onDeviceChange(e.target.value)}
               >
-                {devices.length === 0 ? <option value="">无已批准设备</option> : null}
+                {devices.length === 0 ? <option value="">{t("deploys.noApprovedDevice")}</option> : null}
                 {devices.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name} ({d.id})
@@ -229,7 +243,7 @@ export function DeploySection({
             </label>
 
             <label className="block text-sm">
-              <span className="text-muted-foreground mb-1 block text-xs">目标 root</span>
+              <span className="text-muted-foreground mb-1 block text-xs">{t("deploys.targetRoot")}</span>
               <select
                 className="bg-background h-9 w-full rounded-md border px-2 text-sm"
                 value={targetIdx}
@@ -237,13 +251,13 @@ export function DeploySection({
                 disabled={targets.length === 0}
               >
                 {targets.length === 0 ? (
-                  <option value={0}>该设备无可用目标（需先上报 inventory 并注册 root）</option>
+                  <option value={0}>{t("deploys.noTargetAvailable")}</option>
                 ) : (
-                  targets.map((t, i) => (
-                    <option key={targetKey(t)} value={i}>
-                      {t.toolKey} · {t.scope}
-                      {t.shared ? " · shared" : ""}
-                      {t.rootId ? ` · ${t.rootId}` : ""}
+                  targets.map((tg, i) => (
+                    <option key={targetKey(tg)} value={i}>
+                      {tg.toolKey} · {tg.scope}
+                      {tg.shared ? " · shared" : ""}
+                      {tg.rootId ? ` · ${tg.rootId}` : ""}
                     </option>
                   ))
                 )}
@@ -257,15 +271,17 @@ export function DeploySection({
             {planHint?.shared ? (
               <Alert>
                 <Info className="size-4" aria-hidden />
-                <AlertTitle>Shared Agent Skills</AlertTitle>
+                <AlertTitle>{t("deploys.sharedAgentSkills")}</AlertTitle>
                 <AlertDescription className="space-y-1">
                   <p>
-                    该目标读取 .agents/skills。安装到共享 root 后，读取该目录的工具会看到同一份内容
+                    {t("deploys.sharedReadHint")}
                     {sharedReaderNames ? `：${sharedReaderNames}` : "。"}
                   </p>
                   {planHint.shared.already_covered ? (
                     <p>
-                      同名同内容已由共享 root {planHint.shared.covered_by_root_id ?? "agents"} 覆盖，通常无需再给该工具单独安装。
+                      {t("deploys.sharedAlreadyCovered", {
+                        root: planHint.shared.covered_by_root_id ?? "agents",
+                      })}
                     </p>
                   ) : null}
                 </AlertDescription>
@@ -273,19 +289,19 @@ export function DeploySection({
             ) : target?.shared ? (
               <Alert>
                 <Info className="size-4" aria-hidden />
-                <AlertTitle>共享目录</AlertTitle>
+                <AlertTitle>{t("deploys.sharedDir")}</AlertTitle>
                 <AlertDescription>
-                  这是 .agents/skills 共享 root；同一物理目录只需部署一次。
+                  {t("deploys.sharedDirDesc")}
                 </AlertDescription>
               </Alert>
             ) : null}
 
-            {planLoading ? <p className="text-muted-foreground text-xs">正在预览部署计划…</p> : null}
+            {planLoading ? <p className="text-muted-foreground text-xs">{t("deploys.previewingPlan")}</p> : null}
 
             {actionError ?? deployAction.error ? (
               <Alert variant="destructive">
                 <AlertCircle className="size-4" aria-hidden />
-                <AlertTitle>部署失败</AlertTitle>
+                <AlertTitle>{t("deploys.deployFailed")}</AlertTitle>
                 <AlertDescription>{actionError ?? deployAction.error}</AlertDescription>
               </Alert>
             ) : null}
@@ -293,14 +309,37 @@ export function DeploySection({
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)} disabled={deployAction.busy}>
-              取消
+              {t("common.cancel")}
             </Button>
             <Button
               onClick={execute}
               disabled={deployAction.busy || !versionId || !deviceId || targets.length === 0}
             >
               <Send className="size-4" aria-hidden />
-              下发安装
+              {t("deploys.sendInstall")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rollback confirm (§13.8.1 danger op): the JobsList button only opens
+          this; the real api.rollbackDeployment runs after the operator confirms. */}
+      <Dialog open={rollbackConfirmId !== null} onOpenChange={(o) => !o && setRollbackConfirmId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="text-state-danger-600 size-5" aria-hidden />
+              {t("deploys.rollbackConfirmTitle")}
+            </DialogTitle>
+            <DialogDescription>{t("deploys.rollbackConfirmDesc")}</DialogDescription>
+          </DialogHeader>
+          <p className="text-muted-foreground text-xs">{t("deploys.auditNote")}</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRollbackConfirmId(null)}>
+              {t("common.cancel")}
+            </Button>
+            <Button variant="destructive" onClick={confirmRollback}>
+              {t("deploys.rollback")}
             </Button>
           </DialogFooter>
         </DialogContent>

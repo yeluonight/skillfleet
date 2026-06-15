@@ -110,9 +110,15 @@ func Lookup(ctx context.Context, db *sql.DB, token string, now time.Time) (Sessi
 		return Session{}, ErrExpired
 	}
 
-	if _, err := db.ExecContext(ctx, `UPDATE sessions SET last_seen_at = ? WHERE id = ?`, now.UnixMilli(), s.ID); err != nil {
-		return Session{}, fmt.Errorf("session: touch: %w", err)
-	}
+	// Touch last_seen_at as a best-effort metadata update. The session has
+	// already passed every authentication check above (found, not revoked,
+	// not expired), so a failed touch must NOT fail the lookup: under WAL +
+	// busy_timeout, concurrent requests in the same batch can still race the
+	// write and surface SQLITE_BUSY, and turning that into a returned error
+	// makes requireAuth emit a spurious 401. Record the new time on the
+	// returned session optimistically; swallow a write error (the next
+	// successful request re-touches).
+	_, _ = db.ExecContext(ctx, `UPDATE sessions SET last_seen_at = ? WHERE id = ?`, now.UnixMilli(), s.ID)
 	s.LastSeenAt = now
 	return s, nil
 }
