@@ -1,0 +1,115 @@
+# CI: lint + test on every push to main and every PR. Keeps main
+# buildable (the §1.1 hard rule) and catches regressions before a
+# release tag is cut.
+#
+# Three jobs: Go (vet + test + golangci-lint), web (tsc + eslint + build),
+# and e2e (Playwright against a real server + the Vite dev server). The
+# committed internal/webui/embed/dist stub lets the Go build/test succeed
+# without first building the WebUI, so the Go job needs no Node.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: go vet
+        run: go vet ./apps/... ./internal/... ./migrations/...
+      - name: go test
+        run: go test ./apps/... ./internal/... ./migrations/...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          # v2.x lint is built with go1.26 and can lint this go1.25 module;
+          # the action's older default (v1.64.x / go1.24) refuses to. Note
+          # golangci-lint v2 requires golangci-lint-action v7. Lint config
+          # lives in .golangci.yml.
+          version: v2.12.2
+          args: ./apps/... ./internal/... ./migrations/...
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # node 24 / npm 11 to match the lockfile: npm 10 mis-reports the
+          # nested optional @emnapi/* native deps as missing from the lock.
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - name: tsc
+        run: npx tsc -b
+      - name: eslint
+        run: npx eslint src
+      - name: build
+        run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: build server
+        # CGO_ENABLED=0: modernc.org/sqlite is pure Go, so the server builds
+        # with no C toolchain (the same property the cross-compiled releases
+        # rely on).
+        run: CGO_ENABLED=0 go build -o /tmp/skillfleet-server ./apps/server
+      - name: start server + capture setup code
+        run: |
+          mkdir -p /tmp/sfdata
+          cat > /tmp/sf-config.yaml <<'YAML'
+          server:
+            bind: "127.0.0.1:47890"
+            external_url: "http://127.0.0.1:47890"
+            data_dir: "/tmp/sfdata"
+          YAML
+          /tmp/skillfleet-server -config /tmp/sf-config.yaml > /tmp/sf-server.log 2>&1 &
+          # Wait for the listener, then grep the setup code from the stderr banner.
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:47890/api/status >/dev/null && break
+            sleep 0.5
+          done
+          CODE=$(grep -oE 'SF-SETUP-[A-Z0-9]{4}-[A-Z0-9]{4}' /tmp/sf-server.log | head -1)
+          echo "SF_SETUP_CODE=$CODE" >> "$GITHUB_ENV"
+          echo "captured setup code: $CODE"
+      - name: install web deps
+        working-directory: apps/web
+        run: npm ci
+      - name: install Playwright chromium
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+      - name: e2e
+        working-directory: apps/web
+        # CI=true makes Playwright start its own Vite server (reuseExistingServer
+        # is false in CI) and the suite consume SF_SETUP_CODE for first-run setup.
+        run: npm run test:e2e
+      - name: upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
