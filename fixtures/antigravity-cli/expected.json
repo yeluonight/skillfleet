@@ -1,0 +1,15 @@
+{
+  "root_id": "antigravitycli_user_cli",
+  "tool": "antigravity-cli",
+  "scope": "user",
+  "skills": [
+    {
+      "name": "shell-helper",
+      "has_skill_md": true,
+      "description": "Drafts shell one-liners from a natural-language request",
+      "effective_state": "on",
+      "native_state": "available",
+      "warnings": []
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "root_id": "claude_user",
+  "tool": "claude-code",
+  "scope": "user",
+  "skills": [
+    {
+      "name": "archived-skill",
+      "has_skill_md": true,
+      "description": "Fully disabled; neither model nor user may invoke it",
+      "effective_state": "off",
+      "native_state": "disabled",
+      "warnings": []
+    },
+    {
+      "name": "deploy-helper",
+      "has_skill_md": true,
+      "description": "Helps deploy applications safely with rollback support",
+      "effective_state": "on",
+      "native_state": "available",
+      "warnings": []
+    },
+    {
+      "name": "manual-runner",
+      "has_skill_md": true,
+      "description": "Only the user can invoke this; the model will not auto-trigger",
+      "effective_state": "user-invocable-only",
+      "native_state": "manual_only",
+      "warnings": []
+    },
+    {
+      "name": "name-only-skill",
+      "has_skill_md": true,
+      "description": "Name surfaced to the model but body withheld until invoked",
+      "effective_state": "name-only",
+      "native_state": "name_only",
+      "warnings": []
+    }
+  ]
+}
