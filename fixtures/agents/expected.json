@@ -1,0 +1,15 @@
+{
+  "root_id": "agents_user",
+  "tool": "agents",
+  "scope": "user",
+  "skills": [
+    {
+      "name": "pkg-auditor",
+      "has_skill_md": true,
+      "description": "Audits package.json dependencies for known issues",
+      "effective_state": "unknown",
+      "native_state": "unknown",
+      "warnings": []
+    }
+  ]
+}

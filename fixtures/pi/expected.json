@@ -1,0 +1,15 @@
+{
+  "root_id": "pi_user_agent",
+  "tool": "pi",
+  "scope": "user",
+  "skills": [
+    {
+      "name": "pkg-auditor",
+      "has_skill_md": true,
+      "description": "Audits package.json dependencies for known issues",
+      "effective_state": "on",
+      "native_state": "available",
+      "warnings": []
+    }
+  ]
+}
