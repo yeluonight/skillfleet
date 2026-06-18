@@ -1,0 +1,22 @@
+-- SkillFleet candidate-root discovery storage (phase 11 t3).
+--
+-- Phase 11 lets the agent SUGGEST skill roots to register (instead of
+-- the operator hand-typing every `roots add`). The agent discovers every
+-- user/system location a tool could keep skills, joins it with its own
+-- allowed_roots, and ships the result on the existing /agent/inventory
+-- upload as report.roots. The server stores that blob so the WebUI can
+-- render a one-click registration UI.
+--
+-- Why a JSON column, not a table:
+--   * roots are written + replaced wholesale every inventory run (the
+--     same replacement model as tool_instances), never queried by SQL
+--     predicate — the WebUI reads the whole set for one device at once.
+--   * a nullable TEXT column on the existing inventory_runs row needs no
+--     new CASCADE wiring and no join. A separate table would buy query
+--     flexibility we have no use for.
+--
+-- STRICT tables accept ADD COLUMN of a nullable column without a table
+-- rebuild, so this is a cheap, append-only change. Old runs (pre-0010)
+-- simply read back NULL → the handler treats that as "no candidates
+-- reported", which is correct for an agent that predates this feature.
+ALTER TABLE inventory_runs ADD COLUMN roots_json TEXT;
