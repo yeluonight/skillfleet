@@ -1,0 +1,6 @@
+# Keep dist tracked but ignore everything inside it except the stub.
+# `make web-embed` overwrites the contents at build time; the stub
+# guarantees `go build` succeeds even without the JS toolchain.
+*
+!.gitignore
+!index.html

@@ -1,0 +1,8 @@
+{
+  "permission": {
+    "skill": {
+      "deploy-helper": "ask",
+      "dangerous-*": "deny"
+    }
+  }
+}

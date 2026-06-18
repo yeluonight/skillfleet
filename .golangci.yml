@@ -1,0 +1,40 @@
+# golangci-lint v2 configuration.
+#
+# Pinned because the action's default (v1.64.x, built with go1.24) refuses
+# to lint a go1.25 module. v2.12.x is built with go1.26 and handles it.
+#
+# Philosophy: keep the linter useful without drowning in idiomatic noise.
+# - Vendored Go under apps/web/node_modules is third-party; never lint it.
+# - Tests routinely `defer resp.Body.Close()` without checking the error;
+#   that is conventional and harmless, so errcheck is relaxed in _test.go.
+# - QF1001 (apply De Morgan's law) is a stylistic quick-fix; a positive
+#   range check reads clearer than its negated form, so it stays off.
+# - A few deferred Close()/cleanup calls in production code are
+#   intentionally best-effort, made explicit with `_ =` at the call site.
+version: "2"
+
+linters:
+  default: standard
+  settings:
+    staticcheck:
+      checks:
+        - all
+        # QF1001 (apply De Morgan's law) is a stylistic quick-fix; a positive
+        # range check reads clearer than its negated form.
+        - -QF1001
+        # ST10xx are stylecheck rules folded into staticcheck in v2. This
+        # repo has its own deliberate file-header convention
+        # ("pkg — file.go: ...") and short receiver/var names, which clash
+        # with ST1000/ST1003/ST1022. Keep the bug-finding SA* checks on.
+        - -ST1000
+        - -ST1003
+        - -ST1022
+  exclusions:
+    paths:
+      - apps/web/node_modules
+    rules:
+      # Test code may ignore Close()/Decode() errors on response bodies and
+      # temp writers — idiomatic and not worth the churn.
+      - path: _test\.go
+        linters:
+          - errcheck
