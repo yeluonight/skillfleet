@@ -1,0 +1,51 @@
+# Release workflow: on a pushed v* tag, cross-compile agent + server for
+# all platforms and publish them to a GitHub Release.
+#
+# SQLite is pure Go (modernc.org/sqlite), so one ubuntu runner
+# cross-compiles every GOOS/GOARCH with CGO_ENABLED=0 — no per-platform
+# matrix, no C toolchain. The server embeds the WebUI, so we build the web
+# bundle and run `make web-embed` before `make release`.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # required to create the Release and upload assets
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # node 24 / npm 11 to match the lockfile (see ci.yml).
+          node-version: 24
+
+      - name: Build WebUI bundle + embed
+        run: make web-install web-build web-embed
+
+      - name: Cross-compile release binaries
+        # GITHUB_REF_NAME is the tag (e.g. v0.10.0); inject it as the
+        # binaries' version.
+        run: make release VERSION="${GITHUB_REF_NAME}"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/release/skillfleet-*
+            dist/release/SHA256SUMS
+          generate_release_notes: true
+          fail_on_unmatched_files: true
