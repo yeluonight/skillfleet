@@ -1,0 +1,29 @@
+<!--
+  Build-time placeholder. Replaced by Makefile when the real WebUI
+  bundle is copied from apps/web/dist into internal/webui/embed/dist.
+  Having this stub in the repository lets `go build` succeed without
+  first running `npm run build`, which keeps `go test ./...` and IDE
+  setup from blocking on the JS toolchain.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SkillFleet (no WebUI bundle)</title>
+  </head>
+  <body>
+    <main style="font-family: ui-monospace, monospace; padding: 2rem; line-height: 1.5;">
+      <h1>SkillFleet</h1>
+      <p>
+        The server is running but no WebUI bundle was embedded into this binary.
+        Build the WebUI first:
+      </p>
+      <pre>make web-build &amp;&amp; make server</pre>
+      <p>
+        Or during development, run <code>npm run dev</code> in
+        <code>apps/web/</code> and visit
+        <a href="http://127.0.0.1:5173/">http://127.0.0.1:5173/</a> instead.
+      </p>
+    </main>
+  </body>
+</html>
