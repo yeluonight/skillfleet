@@ -1,0 +1,31 @@
+{
+  "root_id": "opencode_user_opencode",
+  "tool": "opencode",
+  "scope": "user",
+  "skills": [
+    {
+      "name": "dangerous-wipe",
+      "has_skill_md": true,
+      "description": "Destructive cleanup; matched by the dangerous-* deny glob",
+      "effective_state": "off",
+      "native_state": "deny",
+      "warnings": []
+    },
+    {
+      "name": "deploy-helper",
+      "has_skill_md": true,
+      "description": "Deploys services; requires confirmation before running",
+      "effective_state": "ask",
+      "native_state": "ask",
+      "warnings": []
+    },
+    {
+      "name": "format-fixer",
+      "has_skill_md": true,
+      "description": "Auto-formats code on request",
+      "effective_state": "on",
+      "native_state": "allow",
+      "warnings": []
+    }
+  ]
+}

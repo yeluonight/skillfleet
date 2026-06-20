@@ -1,0 +1,23 @@
+{
+  "root_id": "antigravity_user",
+  "tool": "antigravity",
+  "scope": "user",
+  "skills": [
+    {
+      "name": "code-explainer",
+      "has_skill_md": true,
+      "description": "Explains a selected code region in plain language",
+      "effective_state": "on",
+      "native_state": "available",
+      "warnings": []
+    },
+    {
+      "name": "refactor-aide",
+      "has_skill_md": true,
+      "description": "Suggests structural refactors for the open file",
+      "effective_state": "on",
+      "native_state": "available",
+      "warnings": []
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "root_id": "codex_user",
+  "tool": "codex",
+  "scope": "user",
+  "skills": [
+    {
+      "name": "build-runner",
+      "has_skill_md": true,
+      "description": "Runs builds across the monorepo",
+      "effective_state": "on",
+      "native_state": "available",
+      "warnings": []
+    },
+    {
+      "name": "legacy-deploy",
+      "has_skill_md": true,
+      "description": "Old deploy flow kept around but turned off",
+      "effective_state": "off",
+      "native_state": "disabled",
+      "warnings": []
+    },
+    {
+      "name": "test-gen",
+      "has_skill_md": true,
+      "description": "Generates unit tests from a target file",
+      "effective_state": "on",
+      "native_state": "available",
+      "warnings": []
+    }
+  ]
+}
